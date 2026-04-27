@@ -1,0 +1,561 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/maintenance.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "MaintenanceWindowService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/maintenance/windows": {
+      "get": {
+        "summary": "uc_08_01_20: List maintenance windows",
+        "operationId": "MaintenanceWindowService_ListMaintenanceWindows",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/maintenanceListMaintenanceWindowsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "description": "Optional filter\n\n - MAINTENANCE_STATUS_SCHEDULED: Window is scheduled for future\n - MAINTENANCE_STATUS_ACTIVE: Window is currently active\n - MAINTENANCE_STATUS_COMPLETED: Window has completed\n - MAINTENANCE_STATUS_CANCELLED: Window was cancelled\n - MAINTENANCE_STATUS_ORPHANED: Window was orphaned (monitors deleted)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "MAINTENANCE_STATUS_UNSPECIFIED",
+              "MAINTENANCE_STATUS_SCHEDULED",
+              "MAINTENANCE_STATUS_ACTIVE",
+              "MAINTENANCE_STATUS_COMPLETED",
+              "MAINTENANCE_STATUS_CANCELLED",
+              "MAINTENANCE_STATUS_ORPHANED"
+            ],
+            "default": "MAINTENANCE_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "start_date",
+            "description": "Optional filter start",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "end_date",
+            "description": "Optional filter end",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      },
+      "post": {
+        "summary": "uc_08_01_01: Create a maintenance window",
+        "operationId": "MaintenanceWindowService_CreateMaintenanceWindow",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/maintenanceMaintenanceWindow"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/maintenanceCreateMaintenanceWindowRequest"
+            }
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      }
+    },
+    "/api/v1/maintenance/windows/history": {
+      "get": {
+        "summary": "uc_08_01_21: Get maintenance window history",
+        "operationId": "MaintenanceWindowService_GetMaintenanceWindowHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/maintenanceGetMaintenanceWindowHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "monitor_ids",
+            "description": "Optional filter by monitors",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      }
+    },
+    "/api/v1/maintenance/windows/{id}": {
+      "delete": {
+        "summary": "uc_08_01_24: Delete a maintenance window",
+        "operationId": "MaintenanceWindowService_DeleteMaintenanceWindow",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      },
+      "put": {
+        "summary": "uc_08_01_19: Update a maintenance window",
+        "operationId": "MaintenanceWindowService_UpdateMaintenanceWindow",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/maintenanceMaintenanceWindow"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/MaintenanceWindowServiceUpdateMaintenanceWindowBody"
+            }
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      }
+    },
+    "/api/v1/maintenance/windows/{id}/cancel": {
+      "post": {
+        "summary": "uc_08_01_25a: Cancel an active maintenance window",
+        "operationId": "MaintenanceWindowService_CancelMaintenanceWindow",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/maintenanceMaintenanceWindow"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/MaintenanceWindowServiceCancelMaintenanceWindowBody"
+            }
+          }
+        ],
+        "tags": [
+          "MaintenanceWindowService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "MaintenanceWindowServiceCancelMaintenanceWindowBody": {
+      "type": "object",
+      "properties": {
+        "cancellation_reason": {
+          "type": "string",
+          "title": "Optional reason"
+        }
+      },
+      "title": "CancelMaintenanceWindowRequest cancels an active or scheduled maintenance window"
+    },
+    "MaintenanceWindowServiceUpdateMaintenanceWindowBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "title": "For optimistic locking"
+        }
+      },
+      "title": "UpdateMaintenanceWindowRequest updates an existing maintenance window"
+    },
+    "commonEmpty": {
+      "type": "object",
+      "title": "Empty request"
+    },
+    "maintenanceCreateMaintenanceWindowRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recurrence": {
+          "$ref": "#/definitions/maintenanceRecurrenceType"
+        },
+        "is_global": {
+          "type": "boolean"
+        },
+        "pause_monitoring": {
+          "type": "boolean"
+        },
+        "suppress_alerts": {
+          "type": "boolean"
+        },
+        "safe_mode": {
+          "type": "boolean"
+        },
+        "monitor_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "CreateMaintenanceWindowRequest creates a new maintenance window"
+    },
+    "maintenanceGetMaintenanceWindowHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/maintenanceMaintenanceWindow"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "GetMaintenanceWindowHistoryResponse returns historical maintenance windows"
+    },
+    "maintenanceListMaintenanceWindowsResponse": {
+      "type": "object",
+      "properties": {
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/maintenanceMaintenanceWindow"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "ListMaintenanceWindowsResponse returns maintenance windows"
+    },
+    "maintenanceMaintenanceWindow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "$ref": "#/definitions/maintenanceMaintenanceWindowStatus"
+        },
+        "recurrence": {
+          "$ref": "#/definitions/maintenanceRecurrenceType"
+        },
+        "is_global": {
+          "type": "boolean",
+          "title": "If true, applies to all monitors"
+        },
+        "pause_monitoring": {
+          "type": "boolean",
+          "title": "If true, pauses monitoring during window"
+        },
+        "suppress_alerts": {
+          "type": "boolean",
+          "title": "If true, suppresses alerts during window"
+        },
+        "safe_mode": {
+          "type": "boolean",
+          "title": "If true, allows safe checks during maintenance"
+        },
+        "monitor_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Specific monitors (empty if global)"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "activated_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "When window became active"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "When window completed"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "title": "For optimistic locking"
+        }
+      },
+      "title": "MaintenanceWindow represents a maintenance period"
+    },
+    "maintenanceMaintenanceWindowStatus": {
+      "type": "string",
+      "enum": [
+        "MAINTENANCE_STATUS_UNSPECIFIED",
+        "MAINTENANCE_STATUS_SCHEDULED",
+        "MAINTENANCE_STATUS_ACTIVE",
+        "MAINTENANCE_STATUS_COMPLETED",
+        "MAINTENANCE_STATUS_CANCELLED",
+        "MAINTENANCE_STATUS_ORPHANED"
+      ],
+      "default": "MAINTENANCE_STATUS_UNSPECIFIED",
+      "description": "- MAINTENANCE_STATUS_SCHEDULED: Window is scheduled for future\n - MAINTENANCE_STATUS_ACTIVE: Window is currently active\n - MAINTENANCE_STATUS_COMPLETED: Window has completed\n - MAINTENANCE_STATUS_CANCELLED: Window was cancelled\n - MAINTENANCE_STATUS_ORPHANED: Window was orphaned (monitors deleted)",
+      "title": "MaintenanceWindowStatus represents the current status of a maintenance window"
+    },
+    "maintenanceRecurrenceType": {
+      "type": "string",
+      "enum": [
+        "RECURRENCE_TYPE_UNSPECIFIED",
+        "RECURRENCE_TYPE_ONCE",
+        "RECURRENCE_TYPE_DAILY",
+        "RECURRENCE_TYPE_WEEKLY",
+        "RECURRENCE_TYPE_MONTHLY"
+      ],
+      "default": "RECURRENCE_TYPE_UNSPECIFIED",
+      "description": "- RECURRENCE_TYPE_ONCE: One-time window\n - RECURRENCE_TYPE_DAILY: Repeats daily\n - RECURRENCE_TYPE_WEEKLY: Repeats weekly\n - RECURRENCE_TYPE_MONTHLY: Repeats monthly",
+      "title": "RecurrenceType defines how often the maintenance window repeats"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

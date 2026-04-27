@@ -1,0 +1,485 @@
+// Package grpc предоставляет gRPC handlers для monitor service.
+//
+// Пакет реализует gRPC API согласно протоколу, определённому в api/proto/monitor/v1.
+package grpc
+
+import (
+	"context"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	monitov1 "github.com/raul/monitor/api/proto/monitor/v1"
+	"github.com/raul/monitor/backend/monitor-service/internal/repository/interfaces"
+	"github.com/raul/monitor/backend/monitor-service/internal/service"
+	"github.com/raul/monitor/backend/monitor-service/internal/service/dto"
+)
+
+// MonitorHandler реализует gRPC handlers для monitor service.
+type MonitorHandler struct {
+	monitov1.UnimplementedMonitorServiceServer
+
+	monitorService      *service.MonitorService
+	uptimeCalculator    *service.UptimeCalculator
+	incidentDetector    *service.IncidentDetector
+	validator           *validator.Validate
+}
+
+// NewMonitorHandler создаёт новый MonitorHandler.
+func NewMonitorHandler(
+	monitorService *service.MonitorService,
+	uptimeCalculator *service.UptimeCalculator,
+	incidentDetector *service.IncidentDetector,
+) *MonitorHandler {
+	return &MonitorHandler{
+		monitorService:   monitorService,
+		uptimeCalculator: uptimeCalculator,
+		incidentDetector: incidentDetector,
+		validator:        validator.New(),
+	}
+}
+
+// CreateMonitor создаёт новый монитор.
+func (h *MonitorHandler) CreateMonitor(ctx context.Context, req *monitov1.CreateMonitorRequest) (*monitov1.CreateMonitorResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Валидация запроса
+	if err := h.validateStruct(req); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "validation failed: %v", err)
+	}
+
+	// Конвертируем в DTO
+	createReq := &dto.CreateMonitorRequest{
+		UserID:                           userID,
+		Name:                             req.Name,
+		URL:                              req.Url,
+		CheckType:                        req.CheckType,
+		IntervalSeconds:                  int(req.IntervalSeconds),
+		TimeoutSeconds:                   int(req.TimeoutSeconds),
+		WorkingHoursStart:                req.WorkingHoursStart,
+		WorkingHoursEnd:                  req.WorkingHoursEnd,
+		WorkingDays:                      req.WorkingDays,
+		DegradedResponseTimeThreshold:    intPtr(req.DegradedResponseTimeThreshold),
+		DegradedFailureRateThreshold:     intPtr(req.DegradedFailureRateThreshold),
+	}
+
+	// Создаём монитор
+	resp, err := h.monitorService.CreateMonitor(ctx, createReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &monitov1.CreateMonitorResponse{
+		Monitor: h.dtoToProto(resp),
+	}, nil
+}
+
+// GetMonitor возвращает информацию о мониторе.
+func (h *MonitorHandler) GetMonitor(ctx context.Context, req *monitov1.GetMonitorRequest) (*monitov1.GetMonitorResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Получаем монитор
+	resp, err := h.monitorService.GetMonitor(ctx, req.Id, userID)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &monitov1.GetMonitorResponse{
+		Monitor: h.dtoToProto(resp),
+	}, nil
+}
+
+// ListMonitors возвращает список мониторов пользователя.
+func (h *MonitorHandler) ListMonitors(ctx context.Context, req *monitov1.ListMonitorsRequest) (*monitov1.ListMonitorsResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Конвертируем в DTO
+	listReq := &dto.ListMonitorsRequest{
+		UserID: userID,
+		Status: req.Status,
+		Limit:  int(req.Limit),
+		Offset: int(req.Offset),
+	}
+
+	if listReq.Limit <= 0 {
+		listReq.Limit = 100
+	}
+
+	// Получаем список мониторов
+	resp, err := h.monitorService.ListMonitors(ctx, listReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	// Конвертируем в protobuf
+	monitors := make([]*monitov1.Monitor, len(resp.Monitors))
+	for i, m := range resp.Monitors {
+		monitors[i] = h.dtoToProto(m)
+	}
+
+	return &monitov1.ListMonitorsResponse{
+		Monitors: monitors,
+		Total:    int32(resp.Total),
+		Limit:    int32(resp.Limit),
+		Offset:   int32(resp.Offset),
+	}, nil
+}
+
+// UpdateMonitor обновляет параметры монитора.
+func (h *MonitorHandler) UpdateMonitor(ctx context.Context, req *monitov1.UpdateMonitorRequest) (*monitov1.UpdateMonitorResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Валидация запроса
+	if err := h.validateStruct(req); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "validation failed: %v", err)
+	}
+
+	// Конвертируем в DTO
+	updateReq := &dto.UpdateMonitorRequest{
+		ID:                               req.Id,
+		UserID:                           userID,
+		Name:                             stringPtr(req.Name),
+		URL:                              stringPtr(req.Url),
+		IntervalSeconds:                  intPtr(req.IntervalSeconds),
+		TimeoutSeconds:                   intPtr(req.TimeoutSeconds),
+		WorkingHoursStart:                stringPtr(req.WorkingHoursStart),
+		WorkingHoursEnd:                  stringPtr(req.WorkingHoursEnd),
+		WorkingDays:                      req.WorkingDays,
+		DegradedResponseTimeThreshold:    intPtr(req.DegradedResponseTimeThreshold),
+		DegradedFailureRateThreshold:     intPtr(req.DegradedFailureRateThreshold),
+	}
+
+	// Обновляем монитор
+	resp, err := h.monitorService.UpdateMonitor(ctx, updateReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &monitov1.UpdateMonitorResponse{
+		Monitor: h.dtoToProto(resp),
+	}, nil
+}
+
+// DeleteMonitor удаляет монитор.
+func (h *MonitorHandler) DeleteMonitor(ctx context.Context, req *monitov1.DeleteMonitorRequest) (*emptypb.Empty, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Удаляем монитор
+	if err := h.monitorService.DeleteMonitor(ctx, req.Id, userID); err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+// PauseMonitor приостанавливает монитор.
+func (h *MonitorHandler) PauseMonitor(ctx context.Context, req *monitov1.PauseMonitorRequest) (*emptypb.Empty, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Приостанавливаем монитор
+	pauseReq := &dto.PauseMonitorRequest{
+		ID:     req.Id,
+		UserID: userID,
+	}
+
+	if err := h.monitorService.PauseMonitor(ctx, pauseReq); err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+// ResumeMonitor возобновляет работу монитора.
+func (h *MonitorHandler) ResumeMonitor(ctx context.Context, req *monitov1.ResumeMonitorRequest) (*emptypb.Empty, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Возобновляем монитор
+	resumeReq := &dto.ResumeMonitorRequest{
+		ID:     req.Id,
+		UserID: userID,
+	}
+
+	if err := h.monitorService.ResumeMonitor(ctx, resumeReq); err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+// GetMonitorHistory возвращает историю проверок монитора.
+func (h *MonitorHandler) GetMonitorHistory(ctx context.Context, req *monitov1.GetMonitorHistoryRequest) (*monitov1.GetMonitorHistoryResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Конвертируем в DTO
+	historyReq := &dto.GetMonitorHistoryRequest{
+		MonitorID: req.MonitorId,
+		UserID:    userID,
+		From:      req.From.AsTime(),
+		To:        req.To.AsTime(),
+		Limit:     int(req.Limit),
+		Offset:    int(req.Offset),
+	}
+
+	if historyReq.Limit <= 0 {
+		historyReq.Limit = 100
+	}
+
+	// Получаем историю
+	resp, err := h.uptimeCalculator.GetMonitorHistory(ctx, historyReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	// Конвертируем в protobuf
+	results := make([]*monitov1.CheckResult, len(resp.Results))
+	for i, r := range resp.Results {
+		results[i] = h.checkResultDtoToProto(r)
+	}
+
+	return &monitov1.GetMonitorHistoryResponse{
+		Results: results,
+		Total:   int32(resp.Total),
+		Limit:   int32(resp.Limit),
+		Offset:  int32(resp.Offset),
+	}, nil
+}
+
+// GetUptimeStats возвращает статистику uptime за период.
+func (h *MonitorHandler) GetUptimeStats(ctx context.Context, req *monitov1.GetUptimeStatsRequest) (*monitov1.GetUptimeStatsResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Конвертируем в DTO
+	statsReq := &dto.GetUptimeStatsRequest{
+		MonitorID: req.MonitorId,
+		UserID:    userID,
+		From:      req.From.AsTime(),
+		To:        req.To.AsTime(),
+	}
+
+	// Получаем статистику
+	resp, err := h.uptimeCalculator.CalculateUptime(ctx, statsReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	return &monitov1.GetUptimeStatsResponse{
+		Uptime:              resp.Uptime,
+		TotalChecks:         int32(resp.TotalChecks),
+		UpChecks:            int32(resp.UpChecks),
+		DegradedChecks:      int32(resp.DegradedChecks),
+		DownChecks:          int32(resp.DownChecks),
+		PausedChecks:        int32(resp.PausedChecks),
+		TotalDowntime:       resp.TotalDowntime,
+		AverageResponseTime: int32(resp.AverageResponseTime),
+		Incidents:           int32(resp.Incidents),
+		Note:                resp.Note,
+	}, nil
+}
+
+// GetIncidents возвращает инциденты монитора.
+func (h *MonitorHandler) GetIncidents(ctx context.Context, req *monitov1.GetIncidentsRequest) (*monitov1.GetIncidentsResponse, error) {
+	// Извлекаем user_id из контекста (JWT)
+	userID, err := h.extractUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Конвертируем в DTO
+	incidentsReq := &dto.GetIncidentsRequest{
+		MonitorID: req.MonitorId,
+		UserID:    userID,
+		From:      req.From.AsTime(),
+		To:        req.To.AsTime(),
+		Limit:     int(req.Limit),
+		Offset:    int(req.Offset),
+	}
+
+	if incidentsReq.Limit <= 0 {
+		incidentsReq.Limit = 100
+	}
+
+	// Получаем инциденты
+	resp, err := h.incidentDetector.GetIncidents(ctx, incidentsReq)
+	if err != nil {
+		return nil, h.handleError(err)
+	}
+
+	// Конвертируем в protobuf
+	incidents := make([]*monitov1.Incident, len(resp.Incidents))
+	for i, inc := range resp.Incidents {
+		incidents[i] = h.incidentDtoToProto(inc)
+	}
+
+	return &monitov1.GetIncidentsResponse{
+		Incidents: incidents,
+		Total:     int32(resp.Total),
+		Limit:     int32(resp.Limit),
+		Offset:    int32(resp.Offset),
+	}, nil
+}
+
+// Helper методы
+
+// extractUserID извлекает user_id из контекста (JWT).
+// TODO: Интегрировать с auth-service для валидации токена.
+func (h *MonitorHandler) extractUserID(ctx context.Context) (string, error) {
+	// TODO: Реализовать извлечение user_id из JWT токена
+	// Пока возвращаем заглушку для тестирования
+	return "00000000-0000-0000-0000-000000000001", nil
+}
+
+// validateStruct валидирует структуру.
+func (h *MonitorHandler) validateStruct(v interface{}) error {
+	return h.validator.Struct(v)
+}
+
+// handleError конвертирует ошибку в gRPC status.
+func (h *MonitorHandler) handleError(err error) error {
+	if errors.Is(err, interfaces.ErrMonitorNotFound) {
+		return status.Error(codes.NotFound, "monitor not found")
+	}
+	return status.Error(codes.Internal, "internal server error")
+}
+
+// dtoToProto конвертирует DTO в protobuf сообщение.
+func (h *MonitorHandler) dtoToProto(m *dto.MonitorResponse) *monitov1.Monitor {
+	proto := &monitov1.Monitor{
+		Id:                              m.ID,
+		UserId:                          m.UserID,
+		Name:                            m.Name,
+		Url:                             m.URL,
+		CheckType:                       m.CheckType,
+		IntervalSeconds:                 int32(m.IntervalSeconds),
+		TimeoutSeconds:                  int32(m.TimeoutSeconds),
+		Status:                          m.Status,
+		WorkingDays:                     m.WorkingDays,
+		CreatedAt:                       timestamppb.New(m.CreatedAt),
+		UpdatedAt:                       timestamppb.New(m.UpdatedAt),
+	}
+
+	if m.WorkingHoursStart != nil {
+		proto.WorkingHoursStart = *m.WorkingHoursStart
+	}
+	if m.WorkingHoursEnd != nil {
+		proto.WorkingHoursEnd = *m.WorkingHoursEnd
+	}
+	if m.DegradedResponseTimeThreshold != nil {
+		proto.DegradedResponseTimeThreshold = int32(*m.DegradedResponseTimeThreshold)
+	}
+	if m.DegradedFailureRateThreshold != nil {
+		proto.DegradedFailureRateThreshold = int32(*m.DegradedFailureRateThreshold)
+	}
+	if m.LastCheckAt != nil {
+		proto.LastCheckAt = timestamppb.New(*m.LastCheckAt)
+	}
+
+	return proto
+}
+
+// checkResultDtoToProto конвертирует CheckResult DTO в protobuf.
+func (h *MonitorHandler) checkResultDtoToProto(r *dto.CheckResultResponse) *monitov1.CheckResult {
+	proto := &monitov1.CheckResult{
+		Id:        r.ID,
+		MonitorId: r.MonitorID,
+		Status:    r.Status,
+		CheckedAt: timestamppb.New(r.CheckedAt),
+		CreatedAt: timestamppb.New(r.CreatedAt),
+	}
+
+	if r.ResponseTimeMs != nil {
+		proto.ResponseTimeMs = int32(*r.ResponseTimeMs)
+	}
+	if r.StatusCode != nil {
+		proto.StatusCode = int32(*r.StatusCode)
+	}
+	if r.ErrorMessage != nil {
+		proto.ErrorMessage = *r.ErrorMessage
+	}
+
+	return proto
+}
+
+// incidentDtoToProto конвертирует Incident DTO в protobuf.
+func (h *MonitorHandler) incidentDtoToProto(inc *dto.IncidentResponse) *monitov1.Incident {
+	proto := &monitov1.Incident{
+		Id:        inc.ID,
+		MonitorId: inc.MonitorID,
+		StartTime: timestamppb.New(inc.StartTime),
+		Status:    inc.Status,
+		CreatedAt: timestamppb.New(inc.CreatedAt),
+	}
+
+	if inc.EndTime != nil {
+		proto.EndTime = timestamppb.New(*inc.EndTime)
+	}
+	if inc.DurationSeconds != nil {
+		proto.DurationSeconds = int32(*inc.DurationSeconds)
+	}
+
+	return proto
+}
+
+// Helper функции для указателей
+
+func intPtr(i int32) *int {
+	if i == 0 {
+		return nil
+	}
+	result := int(i)
+	return &result
+}
+
+func int32Ptr(i int) *int32 {
+	if i == 0 {
+		return nil
+	}
+	result := int32(i)
+	return &result
+}
+
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

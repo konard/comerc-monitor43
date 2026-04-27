@@ -1,0 +1,186 @@
+// epic=04_billing, us=01_subscription_management
+// Billing service for subscription and payment management
+
+syntax = "proto3";
+
+package billing;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+// Billing service provides subscription and payment management
+service BillingService {
+  // uc_04_01_01: Get available subscription plans
+  rpc GetSubscriptionPlans(common.Empty) returns (SubscriptionPlans) {
+    option (google.api.http) = {
+      get: "/api/v1/billing/plans"
+    };
+  }
+
+  // uc_04_01_02: Get current user subscription
+  rpc GetSubscription(GetSubscriptionRequest) returns (Subscription) {
+    option (google.api.http) = {
+      get: "/api/v1/billing/subscriptions/{user_id}"
+    };
+  }
+
+  // uc_04_01_03: Create subscription checkout
+  rpc CreateCheckout(CreateCheckoutRequest) returns (CheckoutResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/billing/checkout"
+      body: "*"
+    };
+  }
+
+  // uc_04_01_04: Get payment history
+  rpc GetPaymentHistory(GetPaymentHistoryRequest) returns (PaymentHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/billing/payments/{user_id}"
+    };
+  }
+
+  // uc_04_01_05: Cancel subscription
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/billing/subscriptions/{user_id}/cancel"
+      body: "*"
+    };
+  }
+
+  // uc_04_01_06: Handle webhook from payment provider
+  rpc HandleWebhook(WebhookRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/billing/webhooks/{provider}"
+      body: "*"
+    };
+  }
+}
+
+// Subscription tier enum
+enum SubscriptionTier {
+  TIER_UNSPECIFIED = 0;
+  TIER_FREE = 1;
+  TIER_STARTER = 2;
+  TIER_PROFESSIONAL = 3;
+  TIER_BUSINESS = 4;
+}
+
+// Subscription status enum
+enum SubscriptionStatus {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_PENDING = 2;
+  STATUS_CANCELED = 3;
+  STATUS_EXPIRED = 4;
+}
+
+// Payment provider enum
+enum PaymentProvider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_YOOKASSA = 1;
+  PROVIDER_STRIPE = 2;
+}
+
+// Payment status enum
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_SUCCESS = 2;
+  PAYMENT_STATUS_FAILED = 3;
+  PAYMENT_STATUS_REFUNDED = 4;
+}
+
+// Subscription plan
+message SubscriptionPlan {
+  string id = 1;
+  SubscriptionTier tier = 2;
+  string name = 3;
+  string description = 4;
+  int64 price_kopeks = 5;  // price in Russian kopeks (100 kopeks = 1 ruble)
+  int32 billing_period_days = 6;
+  int32 max_monitors = 7;
+  int32 min_check_interval_seconds = 8;
+  repeated Feature features = 9;
+}
+
+// Feature included in plan
+message Feature {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+// Subscription entity
+message Subscription {
+  string id = 1;
+  string user_id = 2;
+  SubscriptionTier tier = 3;
+  SubscriptionStatus status = 4;
+  string plan_id = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp canceled_at = 8;
+  bool auto_renew = 9;
+}
+
+// Payment entity
+message Payment {
+  string id = 1;
+  string user_id = 2;
+  string subscription_id = 3;
+  PaymentProvider provider = 4;
+  string provider_payment_id = 5;
+  PaymentStatus status = 6;
+  int64 amount_kopeks = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  map<string, string> metadata = 10;
+}
+
+// Request/Response messages
+
+message GetSubscriptionRequest {
+  string user_id = 1;
+}
+
+message SubscriptionPlans {
+  repeated SubscriptionPlan plans = 1;
+}
+
+message CreateCheckoutRequest {
+  string user_id = 1;
+  string plan_id = 2;
+  string return_url = 3;
+}
+
+message CheckoutResponse {
+  string checkout_url = 1;
+  string payment_id = 2;
+}
+
+message GetPaymentHistoryRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message PaymentHistoryResponse {
+  repeated Payment payments = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message CancelSubscriptionRequest {
+  string user_id = 1;
+  string cancel_reason = 2;
+}
+
+message WebhookRequest {
+  string provider = 1;
+  map<string, string> payload = 2;
+  string signature = 3;
+}

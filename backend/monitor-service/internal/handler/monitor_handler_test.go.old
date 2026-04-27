@@ -1,0 +1,1920 @@
+package grpc
+
+import (
+	"context"
+	stderrors "errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/go-playground/validator/v10"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	monitov1 "github.com/raul/monitor/api/proto/monitor/v1"
+	"github.com/raul/monitor/backend/monitor-service/internal/repository/interfaces"
+	apperrors "github.com/raul/monitor/backend/monitor-service/pkg/errors"
+	"github.com/raul/monitor/backend/monitor-service/internal/service"
+	"github.com/raul/monitor/backend/monitor-service/internal/service/dto"
+)
+
+// Mock сервисы для тестирования
+
+// MockMonitorService является mock для MonitorService.
+type MockMonitorService struct {
+	mock.Mock
+}
+
+func (m *MockMonitorService) CreateMonitor(ctx context.Context, req *dto.CreateMonitorRequest) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) GetMonitor(ctx context.Context, id, userID string) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, id, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) ListMonitors(ctx context.Context, req *dto.ListMonitorsRequest) (*dto.ListMonitorsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.ListMonitorsResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) UpdateMonitor(ctx context.Context, req *dto.UpdateMonitorRequest) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) DeleteMonitor(ctx context.Context, id, userID string) error {
+	args := m.Called(ctx, id, userID)
+	return args.Error(0)
+}
+
+func (m *MockMonitorService) PauseMonitor(ctx context.Context, req *dto.PauseMonitorRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockMonitorService) ResumeMonitor(ctx context.Context, req *dto.ResumeMonitorRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+// MockUptimeCalculator является mock для UptimeCalculator.
+type MockUptimeCalculator struct {
+	mock.Mock
+}
+
+func (m *MockUptimeCalculator) CalculateUptime(ctx context.Context, req *dto.GetUptimeStatsRequest) (*dto.UptimeStatsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.UptimeStatsResponse), args.Error(1)
+}
+
+func (m *MockUptimeCalculator) GetMonitorHistory(ctx context.Context, req *dto.GetMonitorHistoryRequest) (*dto.GetMonitorHistoryResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.GetMonitorHistoryResponse), args.Error(1)
+}
+
+// MockIncidentDetector является mock для IncidentDetector.
+type MockIncidentDetector struct {
+	mock.Mock
+}
+
+func (m *MockIncidentDetector) GetIncidents(ctx context.Context, req *dto.GetIncidentsRequest) (*dto.GetIncidentsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.GetIncidentsResponse), args.Error(1)
+}
+
+// Helper функция для создания тестового контекста
+func createTestContext() context.Context {
+	return context.Background()
+}
+
+// TestCreateMonitor_Success тестирует успешное создание монитора.
+func TestCreateMonitor_Success(t *testing.T) {
+	// Создаём моки
+	mockMonitorService := new(MockMonitorService)
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockIncidentDetector := new(MockIncidentDetector)
+
+	// Создаём handler
+	handler := &MonitorHandler{
+		monitorService:   mockMonitorService,
+		uptimeCalculator: mockUptimeCalculator,
+		incidentDetector: mockIncidentDetector,
+		validator:        validator.New(),
+	}
+
+	// Подготавливаем тестовые данные
+	ctx := createTestContext()
+	monitorID := uuid.New().String()
+	userID := "00000000-0000-0000-0000-000000000001" // Стаб от extractUserID
+
+	expectedResp := &dto.MonitorResponse{
+		ID:              monitorID,
+		UserID:          userID,
+		Name:            "Test Monitor",
+		URL:             "https://example.com",
+		CheckType:       "HTTP",
+		IntervalSeconds: 60,
+		TimeoutSeconds:  30,
+		Status:          "PENDING",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	req := &monitov1.CreateMonitorRequest{
+		Name:             "Test Monitor",
+		Url:              "https://example.com",
+		CheckType:        "HTTP",
+		IntervalSeconds:  60,
+		TimeoutSeconds:   30,
+	}
+
+	// Настраиваем ожидания моков
+	mockMonitorService.On("CreateMonitor", mock.Anything, mock.AnythingOfType("*dto.CreateMonitorRequest")).Return(expectedResp, nil)
+
+	// Выполняем запрос
+	resp, err := handler.CreateMonitor(ctx, req)
+
+	// Проверяем результаты
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, monitorID, resp.Monitor.Id)
+	assert.Equal(t, "Test Monitor", resp.Monitor.Name)
+	assert.Equal(t, "https://example.com", resp.Monitor.Url)
+	assert.Equal(t, "PENDING", resp.Monitor.Status)
+
+	// Проверяем, что моки были вызваны
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestCreateMonitor_MissingAuth тестирует создание монитора без аутентификации.
+func TestCreateMonitor_MissingAuth(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockIncidentDetector := new(MockIncidentDetector)
+
+	handler := &MonitorHandler{
+		monitorService:   mockMonitorService,
+		uptimeCalculator: mockUptimeCalculator,
+		incidentDetector: mockIncidentDetector,
+		validator:        validator.New(),
+	}
+
+	// Контекст (extractUserID всегда возвращает стаб, так что auth всегда есть)
+	ctx := context.Background()
+
+	req := &monitov1.CreateMonitorRequest{
+		Name:            "Test Monitor",
+		Url:             "https://example.com",
+		CheckType:       "HTTP",
+		IntervalSeconds: 60,
+		TimeoutSeconds:  30,
+	}
+
+	// Выполняем запрос
+	resp, err := handler.CreateMonitor(ctx, req)
+
+	// Проверяем результат - должен быть успех, так как extractUserID возвращает стаб
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+// TestCreateMonitor_ValidationError тестирует создание монитора с невалидными данными.
+func TestCreateMonitor_ValidationError(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockIncidentDetector := new(MockIncidentDetector)
+
+	handler := &MonitorHandler{
+		monitorService:   mockMonitorService,
+		uptimeCalculator: mockUptimeCalculator,
+		incidentDetector: mockIncidentDetector,
+		validator:        validator.New(),
+	}
+
+	ctx := createTestContext()
+
+	tests := []struct {
+		name    string
+		req     *monitov1.CreateMonitorRequest
+		wantErr string
+	}{
+		{
+			name: "empty name",
+			req: &monitov1.CreateMonitorRequest{
+				Name:            "",
+				Url:             "https://example.com",
+				IntervalSeconds: 60,
+			},
+			wantErr: "validation failed",
+		},
+		{
+			name: "empty url",
+			req: &monitov1.CreateMonitorRequest{
+				Name:            "Test",
+				Url:             "",
+				IntervalSeconds: 60,
+			},
+			wantErr: "validation failed",
+		},
+		{
+			name: "zero interval",
+			req: &monitov1.CreateMonitorRequest{
+				Name:            "Test",
+				Url:             "https://example.com",
+				IntervalSeconds: 0,
+			},
+			wantErr: "validation failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := handler.CreateMonitor(ctx, tt.req)
+
+			assert.Error(t, err)
+			assert.Nil(t, resp)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+			mockMonitorService.AssertNotCalled(t, "CreateMonitor", mock.Anything, mock.Anything)
+		})
+	}
+}
+
+// TestCreateMonitor_ServiceError тестирует обработку ошибок от сервиса.
+func TestCreateMonitor_ServiceError(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Free")
+
+	req := &monitov1.CreateMonitorRequest{
+		Name:            "Test Monitor",
+		Url:             "https://example.com",
+		CheckType:       "HTTP",
+		IntervalSeconds: 60,
+		TimeoutSeconds:  30,
+	}
+
+	tests := []struct {
+		name       string
+		serviceErr error
+		wantCode   codes.Code
+	}{
+		{
+			name:       "monitor already exists",
+			serviceErr: interfaces.ErrMonitorAlreadyExists,
+			wantCode:   codes.AlreadyExists,
+		},
+		{
+			name:       "monitor limit reached",
+			serviceErr: apperrors.ErrMonitorLimitReached,
+			wantCode:   codes.ResourceExhausted,
+		},
+		{
+			name:       "unknown tier",
+			serviceErr: apperrors.ErrUnknownTier,
+			wantCode:   codes.Internal,
+		},
+		{
+			name:       "internal error",
+			serviceErr: stderrors.New("internal error"),
+			wantCode:   codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Free", nil)
+			mockMonitorService.On("CreateMonitor", mock.Anything, mock.Anything).Return(nil, tt.serviceErr)
+
+			resp, err := handler.CreateMonitor(ctx, req)
+
+			assert.Error(t, err)
+			assert.Nil(t, resp)
+			assert.Equal(t, tt.wantCode, status.Code(err))
+
+			mockAuthClient.AssertExpectations(t)
+			mockMonitorService.AssertExpectations(t)
+
+			// Ресет моков для следующего теста
+			mockAuthClient.ExpectedCalls = nil
+			mockMonitorService.ExpectedCalls = nil
+		})
+	}
+}
+
+// TestHelperFunctions тестирует вспомогательные функции.
+func TestHelperFunctions(t *testing.T) {
+	t.Run("intPtr", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			input int32
+			want  *int
+		}{
+			{"zero value", 0, nil},
+			{"positive value", 100, func() *int { v := 100; return &v }()},
+			{"negative value", -50, func() *int { v := -50; return &v }()},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := intPtr(tt.input)
+				if tt.want == nil {
+					assert.Nil(t, got)
+				} else {
+					assert.NotNil(t, got)
+					assert.Equal(t, *tt.want, *got)
+				}
+			})
+		}
+	})
+
+	t.Run("int32Ptr", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			input int
+			want  *int32
+		}{
+			{"zero value", 0, nil},
+			{"positive value", 100, func() *int32 { v := int32(100); return &v }()},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := int32Ptr(tt.input)
+				if tt.want == nil {
+					assert.Nil(t, got)
+				} else {
+					assert.NotNil(t, got)
+					assert.Equal(t, *tt.want, *got)
+				}
+			})
+		}
+	})
+
+	t.Run("stringPtr", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			input string
+			want  *string
+		}{
+			{"empty string", "", nil},
+			{"non-empty string", "test", func() *string { v := "test"; return &v }()},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := stringPtr(tt.input)
+				if tt.want == nil {
+					assert.Nil(t, got)
+				} else {
+					assert.NotNil(t, got)
+					assert.Equal(t, *tt.want, *got)
+				}
+			})
+		}
+	})
+}
+
+// TestGetMonitor_Success тестирует успешное получение монитора.
+func TestGetMonitor_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	expectedResp := &dto.MonitorResponse{
+		ID:              monitorID,
+		UserID:          userID,
+		Name:            "Test Monitor",
+		URL:             "https://example.com",
+		CheckType:       "HTTP",
+		IntervalSeconds: 60,
+		TimeoutSeconds:  30,
+		Status:          "UP",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	req := &monitov1.GetMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("GetMonitor", mock.Anything, monitorID, userID).Return(expectedResp, nil)
+
+	resp, err := handler.GetMonitor(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, monitorID, resp.Monitor.Id)
+	assert.Equal(t, "Test Monitor", resp.Monitor.Name)
+	assert.Equal(t, "UP", resp.Monitor.Status)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestGetMonitor_NotFound тестирует получение несуществующего монитора.
+func TestGetMonitor_NotFound(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.GetMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("GetMonitor", mock.Anything, monitorID, userID).Return(nil, interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.GetMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestGetMonitor_PermissionDenied тестирует получение монитора с недостатком прав.
+func TestGetMonitor_PermissionDenied(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.GetMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("GetMonitor", mock.Anything, monitorID, userID).Return(nil, apperrors.ErrPermissionDenied)
+
+	resp, err := handler.GetMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestMonitorHandler_HandleError тестирует handleError метод.
+func TestMonitorHandler_HandleError(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	tests := []struct {
+		name         string
+		err          error
+		expectedCode codes.Code
+	}{
+		{
+			name:         "ErrMonitorNotFound",
+			err:          interfaces.ErrMonitorNotFound,
+			expectedCode: codes.NotFound,
+		},
+		{
+			name:         "ErrMonitorAlreadyExists",
+			err:          interfaces.ErrMonitorAlreadyExists,
+			expectedCode: codes.AlreadyExists,
+		},
+		{
+			name:         "wrapped ErrMonitorNotFound",
+			err:          errors.Wrap(interfaces.ErrMonitorNotFound, "not found in repo"),
+			expectedCode: codes.NotFound,
+		},
+		{
+			name:         "unknown error",
+			err:          stderrors.New("unknown error"),
+			expectedCode: codes.Internal,
+		},
+		{
+			name:         "nil error",
+			err:          nil,
+			expectedCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := handler.handleError(tt.err)
+			assert.Error(t, err)
+			assert.Equal(t, tt.expectedCode, status.Code(err))
+		})
+	}
+}
+
+// TestListMonitors_Success тестирует успешное получение списка мониторов.
+func TestListMonitors_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	monitorID1 := uuid.New().String()
+	monitorID2 := uuid.New().String()
+
+	expectedResp := &dto.ListMonitorsResponse{
+		Monitors: []*dto.MonitorResponse{
+			{
+				ID:              monitorID1,
+				UserID:          userID,
+				Name:            "Monitor 1",
+				URL:             "https://example1.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 60,
+				TimeoutSeconds:  30,
+				Status:          "UP",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			},
+			{
+				ID:              monitorID2,
+				UserID:          userID,
+				Name:            "Monitor 2",
+				URL:             "https://example2.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 120,
+				TimeoutSeconds:  30,
+				Status:          "DOWN",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			},
+		},
+		Total:  2,
+		Limit:  100,
+		Offset: 0,
+	}
+
+	req := &monitov1.ListMonitorsRequest{
+		Limit:  100,
+		Offset: 0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("ListMonitors", mock.Anything, mock.AnythingOfType("*dto.ListMonitorsRequest")).Return(expectedResp, nil)
+
+	resp, err := handler.ListMonitors(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Len(t, resp.Monitors, 2)
+	assert.Equal(t, int32(2), resp.Total)
+	assert.Equal(t, "Monitor 1", resp.Monitors[0].Name)
+	assert.Equal(t, "Monitor 2", resp.Monitors[1].Name)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestListMonitors_WithFilter тестирует получение списка мониторов с фильтром по статусу.
+func TestListMonitors_WithFilter(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	expectedResp := &dto.ListMonitorsResponse{
+		Monitors: []*dto.MonitorResponse{
+			{
+				ID:              uuid.New().String(),
+				UserID:          userID,
+				Name:            "Down Monitor",
+				URL:             "https://example.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 60,
+				TimeoutSeconds:  30,
+				Status:          "DOWN",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			},
+		},
+		Total:  1,
+		Limit:  100,
+		Offset: 0,
+	}
+
+	req := &monitov1.ListMonitorsRequest{
+		Status: "DOWN",
+		Limit:  100,
+		Offset: 0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("ListMonitors", mock.Anything, mock.MatchedBy(func(r *dto.ListMonitorsRequest) bool {
+		return r.Status == "DOWN" && r.Limit == 100 && r.Offset == 0
+	})).Return(expectedResp, nil)
+
+	resp, err := handler.ListMonitors(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Len(t, resp.Monitors, 1)
+	assert.Equal(t, "DOWN", resp.Monitors[0].Status)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestListMonitors_DefaultLimit тестирует применение дефолтного лимита.
+func TestListMonitors_DefaultLimit(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	expectedResp := &dto.ListMonitorsResponse{
+		Monitors: []*dto.MonitorResponse{},
+		Total:    0,
+		Limit:    100,
+		Offset:   0,
+	}
+
+	req := &monitov1.ListMonitorsRequest{
+		Limit:  0, // Должен быть заменён на 100
+		Offset: 0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("ListMonitors", mock.Anything, mock.MatchedBy(func(r *dto.ListMonitorsRequest) bool {
+		return r.Limit == 100 && r.Offset == 0
+	})).Return(expectedResp, nil)
+
+	resp, err := handler.ListMonitors(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, int32(100), resp.Limit)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestDtoToProto тестирует конвертацию DTO в Proto.
+func TestDtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts basic monitor", func(t *testing.T) {
+		now := time.Now()
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "Test Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+
+		assert.Equal(t, dtoResp.ID, protoResp.Id)
+		assert.Equal(t, dtoResp.UserID, protoResp.UserId)
+		assert.Equal(t, dtoResp.Name, protoResp.Name)
+		assert.Equal(t, dtoResp.URL, protoResp.Url)
+		assert.Equal(t, dtoResp.CheckType, protoResp.CheckType)
+		assert.Equal(t, int32(60), protoResp.IntervalSeconds)
+		assert.Equal(t, int32(30), protoResp.TimeoutSeconds)
+		assert.Equal(t, dtoResp.Status, protoResp.Status)
+	})
+
+	t.Run("converts monitor with optional fields", func(t *testing.T) {
+		threshold := 1000
+		failureRate := 50
+		lastCheck := time.Now()
+
+		dtoResp := &dto.MonitorResponse{
+			ID:                             uuid.New().String(),
+			UserID:                         "user-123",
+			Name:                           "Test Monitor",
+			URL:                            "https://example.com",
+			CheckType:                      "HTTP",
+			IntervalSeconds:                60,
+			TimeoutSeconds:                 30,
+			Status:                         "DEGRADED",
+			LastCheckAt:                    &lastCheck,
+			DegradedResponseTimeThreshold:  &threshold,
+			DegradedFailureRateThreshold:   &failureRate,
+			CreatedAt:                      time.Now(),
+			UpdatedAt:                      time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+
+		assert.Equal(t, int32(1000), protoResp.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(50), protoResp.DegradedFailureRateThreshold)
+		assert.True(t, protoResp.LastCheckAt.IsValid())
+	})
+
+	t.Run("converts monitor with working hours", func(t *testing.T) {
+		start := "09:00"
+		end := "18:00"
+
+		dtoResp := &dto.MonitorResponse{
+			ID:                uuid.New().String(),
+			UserID:            "user-123",
+			Name:              "Business Hours Monitor",
+			URL:               "https://example.com",
+			CheckType:         "HTTP",
+			IntervalSeconds:   300,
+			TimeoutSeconds:    30,
+			Status:            "UP",
+			WorkingHoursStart: &start,
+			WorkingHoursEnd:   &end,
+			WorkingDays:       []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+
+		assert.Equal(t, "09:00", protoResp.WorkingHoursStart)
+		assert.Equal(t, "18:00", protoResp.WorkingHoursEnd)
+		assert.Len(t, protoResp.WorkingDays, 5)
+	})
+
+	t.Run("converts monitor without optional fields", func(t *testing.T) {
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "Minimal Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "PENDING",
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+
+		assert.Equal(t, int32(0), protoResp.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(0), protoResp.DegradedFailureRateThreshold)
+		assert.False(t, protoResp.LastCheckAt.IsValid())
+	})
+}
+
+// TestUpdateMonitor_Success тестирует успешное обновление монитора.
+func TestUpdateMonitor_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	newName := "Updated Monitor"
+	newURL := "https://updated.com"
+
+	expectedResp := &dto.MonitorResponse{
+		ID:              monitorID,
+		UserID:          userID,
+		Name:            newName,
+		URL:             newURL,
+		CheckType:       "HTTP",
+		IntervalSeconds: 120,
+		TimeoutSeconds:  30,
+		Status:          "UP",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	req := &monitov1.UpdateMonitorRequest{
+		Id:              monitorID,
+		Name:            &newName,
+		Url:             &newURL,
+		IntervalSeconds: 120,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("UpdateMonitor", mock.Anything, mock.AnythingOfType("*dto.UpdateMonitorRequest")).Return(expectedResp, nil)
+
+	resp, err := handler.UpdateMonitor(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, newName, resp.Monitor.Name)
+	assert.Equal(t, newURL, resp.Monitor.Url)
+	assert.Equal(t, int32(120), resp.Monitor.IntervalSeconds)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestUpdateMonitor_NotFound тестирует обновление несуществующего монитора.
+func TestUpdateMonitor_NotFound(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	newName := "Updated Monitor"
+
+	req := &monitov1.UpdateMonitorRequest{
+		Id:   monitorID,
+		Name: &newName,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("UpdateMonitor", mock.Anything, mock.Anything).Return(nil, interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.UpdateMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestUpdateMonitor_PermissionDenied тестирует обновление монитора с недостатком прав.
+func TestUpdateMonitor_PermissionDenied(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	newName := "Updated Monitor"
+
+	req := &monitov1.UpdateMonitorRequest{
+		Id:   monitorID,
+		Name: &newName,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("UpdateMonitor", mock.Anything, mock.Anything).Return(nil, apperrors.ErrPermissionDenied)
+
+	resp, err := handler.UpdateMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestDeleteMonitor_Success тестирует успешное удаление монитора.
+func TestDeleteMonitor_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.DeleteMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("DeleteMonitor", mock.Anything, monitorID, userID).Return(nil)
+
+	resp, err := handler.DeleteMonitor(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestDeleteMonitor_NotFound тестирует удаление несуществующего монитора.
+func TestDeleteMonitor_NotFound(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.DeleteMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("DeleteMonitor", mock.Anything, monitorID, userID).Return(interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.DeleteMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestPauseMonitor_Success тестирует успешную приостановку монитора.
+func TestPauseMonitor_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.PauseMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("PauseMonitor", mock.Anything, mock.AnythingOfType("*dto.PauseMonitorRequest")).Return(nil)
+
+	resp, err := handler.PauseMonitor(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestPauseMonitor_NotFound тестирует приостановку несуществующего монитора.
+func TestPauseMonitor_NotFound(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.PauseMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("PauseMonitor", mock.Anything, mock.Anything).Return(interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.PauseMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestResumeMonitor_Success тестирует успешное возобновление монитора.
+func TestResumeMonitor_Success(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.ResumeMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("ResumeMonitor", mock.Anything, mock.AnythingOfType("*dto.ResumeMonitorRequest")).Return(nil)
+
+	resp, err := handler.ResumeMonitor(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestResumeMonitor_NotFound тестирует возобновление несуществующего монитора.
+func TestResumeMonitor_NotFound(t *testing.T) {
+	mockMonitorService := new(MockMonitorService)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		monitorService: mockMonitorService,
+		authClient:     mockAuthClient,
+		validator:      validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	req := &monitov1.ResumeMonitorRequest{
+		Id: monitorID,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockMonitorService.On("ResumeMonitor", mock.Anything, mock.Anything).Return(interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.ResumeMonitor(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockMonitorService.AssertExpectations(t)
+}
+
+// TestCheckResultDtoToProto тестирует конвертацию CheckResult.
+func TestCheckResultDtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts check result with all fields", func(t *testing.T) {
+		responseTimeMs := 250
+		statusCode := 200
+
+		dtoResp := &dto.CheckResultResponse{
+			ID:             uuid.New().String(),
+			MonitorID:      uuid.New().String(),
+			Status:         "UP",
+			ResponseTimeMs: &responseTimeMs,
+			StatusCode:     &statusCode,
+			CheckedAt:      time.Now(),
+			CreatedAt:      time.Now(),
+		}
+
+		protoResp := handler.checkResultDtoToProto(dtoResp)
+
+		assert.Equal(t, dtoResp.ID, protoResp.Id)
+		assert.Equal(t, dtoResp.MonitorID, protoResp.MonitorId)
+		assert.Equal(t, dtoResp.Status, protoResp.Status)
+		assert.Equal(t, int32(250), protoResp.ResponseTimeMs)
+		assert.Equal(t, int32(200), protoResp.StatusCode)
+	})
+
+	t.Run("converts check result with error", func(t *testing.T) {
+		errorMsg := "connection timeout"
+
+		dtoResp := &dto.CheckResultResponse{
+			ID:           uuid.New().String(),
+			MonitorID:    uuid.New().String(),
+			Status:       "DOWN",
+			ErrorMessage: &errorMsg,
+			CheckedAt:    time.Now(),
+			CreatedAt:    time.Now(),
+		}
+
+		protoResp := handler.checkResultDtoToProto(dtoResp)
+
+		assert.Equal(t, "DOWN", protoResp.Status)
+		assert.Equal(t, "connection timeout", protoResp.ErrorMessage)
+	})
+
+	t.Run("converts check result without optional fields", func(t *testing.T) {
+		dtoResp := &dto.CheckResultResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			Status:    "PENDING",
+			CheckedAt: time.Now(),
+			CreatedAt: time.Now(),
+		}
+
+		protoResp := handler.checkResultDtoToProto(dtoResp)
+
+		assert.Equal(t, "PENDING", protoResp.Status)
+		assert.Equal(t, int32(0), protoResp.ResponseTimeMs)
+		assert.Equal(t, int32(0), protoResp.StatusCode)
+		assert.Equal(t, "", protoResp.ErrorMessage)
+	})
+}
+
+// TestGetMonitorHistory_Success тестирует успешное получение истории проверок.
+func TestGetMonitorHistory_Success(t *testing.T) {
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		uptimeCalculator: mockUptimeCalculator,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-24 * time.Hour)
+	to := time.Now()
+
+	responseTime := int(250)
+	statusCode := int(200)
+
+	expectedResp := &dto.GetMonitorHistoryResponse{
+		Results: []*dto.CheckResultResponse{
+			{
+				ID:             uuid.New().String(),
+				MonitorID:      monitorID,
+				Status:         "UP",
+				ResponseTimeMs: &responseTime,
+				StatusCode:     &statusCode,
+				CheckedAt:      from,
+				CreatedAt:      from,
+			},
+		},
+		Total:  1,
+		Limit:  100,
+		Offset: 0,
+	}
+
+	req := &monitov1.GetMonitorHistoryRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+		Limit:     100,
+		Offset:    0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockUptimeCalculator.On("GetMonitorHistory", mock.Anything, mock.AnythingOfType("*dto.GetMonitorHistoryRequest")).Return(expectedResp, nil)
+
+	resp, err := handler.GetMonitorHistory(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Len(t, resp.Results, 1)
+	assert.Equal(t, "UP", resp.Results[0].Status)
+	assert.Equal(t, int32(250), resp.Results[0].ResponseTimeMs)
+	assert.Equal(t, int32(200), resp.Results[0].StatusCode)
+
+	mockAuthClient.AssertExpectations(t)
+	mockUptimeCalculator.AssertExpectations(t)
+}
+
+// TestGetMonitorHistory_NotFound тестирует получение истории для несуществующего монитора.
+func TestGetMonitorHistory_NotFound(t *testing.T) {
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		uptimeCalculator: mockUptimeCalculator,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-24 * time.Hour)
+	to := time.Now()
+
+	req := &monitov1.GetMonitorHistoryRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+		Limit:     100,
+		Offset:    0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockUptimeCalculator.On("GetMonitorHistory", mock.Anything, mock.Anything).Return(nil, interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.GetMonitorHistory(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockUptimeCalculator.AssertExpectations(t)
+}
+
+// TestGetUptimeStats_Success тестирует успешное получение статистики uptime.
+func TestGetUptimeStats_Success(t *testing.T) {
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		uptimeCalculator: mockUptimeCalculator,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-24 * time.Hour)
+	to := time.Now()
+
+	expectedResp := &dto.UptimeStatsResponse{
+		Uptime:              99.5,
+		TotalChecks:         1000,
+		UpChecks:            995,
+		DegradedChecks:      3,
+		DownChecks:          2,
+		PausedChecks:        0,
+		TotalDowntime:       120,
+		AverageResponseTime: 150,
+		Incidents:           2,
+		Note:                "Good uptime",
+	}
+
+	req := &monitov1.GetUptimeStatsRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockUptimeCalculator.On("CalculateUptime", mock.Anything, mock.AnythingOfType("*dto.GetUptimeStatsRequest")).Return(expectedResp, nil)
+
+	resp, err := handler.GetUptimeStats(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, float64(99.5), resp.Uptime)
+	assert.Equal(t, int32(1000), resp.TotalChecks)
+	assert.Equal(t, int32(995), resp.UpChecks)
+	assert.Equal(t, int32(2), resp.Incidents)
+
+	mockAuthClient.AssertExpectations(t)
+	mockUptimeCalculator.AssertExpectations(t)
+}
+
+// TestGetUptimeStats_NotFound тестирует получение статистики для несуществующего монитора.
+func TestGetUptimeStats_NotFound(t *testing.T) {
+	mockUptimeCalculator := new(MockUptimeCalculator)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		uptimeCalculator: mockUptimeCalculator,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-24 * time.Hour)
+	to := time.Now()
+
+	req := &monitov1.GetUptimeStatsRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockUptimeCalculator.On("CalculateUptime", mock.Anything, mock.Anything).Return(nil, interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.GetUptimeStats(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockUptimeCalculator.AssertExpectations(t)
+}
+
+// TestGetIncidents_Success тестирует успешное получение инцидентов.
+func TestGetIncidents_Success(t *testing.T) {
+	mockIncidentDetector := new(MockIncidentDetector)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		incidentDetector: mockIncidentDetector,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-7 * 24 * time.Hour)
+	to := time.Now()
+
+	expectedResp := &dto.GetIncidentsResponse{
+		Incidents: []*dto.IncidentResponse{
+			{
+				ID:        uuid.New().String(),
+				MonitorID: monitorID,
+				StartTime: from,
+				Status:    "ACTIVE",
+				CreatedAt: from,
+			},
+		},
+		Total:  1,
+		Limit:  100,
+		Offset: 0,
+	}
+
+	req := &monitov1.GetIncidentsRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+		Limit:     100,
+		Offset:    0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockIncidentDetector.On("GetIncidents", mock.Anything, mock.AnythingOfType("*dto.GetIncidentsRequest")).Return(expectedResp, nil)
+
+	resp, err := handler.GetIncidents(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Len(t, resp.Incidents, 1)
+	assert.Equal(t, "ACTIVE", resp.Incidents[0].Status)
+
+	mockAuthClient.AssertExpectations(t)
+	mockIncidentDetector.AssertExpectations(t)
+}
+
+// TestGetIncidents_NotFound тестирует получение инцидентов для несуществующего монитора.
+func TestGetIncidents_NotFound(t *testing.T) {
+	mockIncidentDetector := new(MockIncidentDetector)
+	mockAuthClient := new(MockAuthClient)
+
+	handler := &MonitorHandler{
+		incidentDetector: mockIncidentDetector,
+		authClient:       mockAuthClient,
+		validator:        validator.New(),
+	}
+
+	userID := uuid.New().String()
+	monitorID := uuid.New().String()
+	ctx := createContextWithAuth(userID, "Pro")
+
+	from := time.Now().Add(-7 * 24 * time.Hour)
+	to := time.Now()
+
+	req := &monitov1.GetIncidentsRequest{
+		MonitorId: monitorID,
+		From:      timestamppb.New(from),
+		To:        timestamppb.New(to),
+		Limit:     100,
+		Offset:    0,
+	}
+
+	mockAuthClient.On("ValidateTokenWithTier", mock.Anything, "test-token").Return(userID, "Pro", nil)
+	mockIncidentDetector.On("GetIncidents", mock.Anything, mock.Anything).Return(nil, interfaces.ErrMonitorNotFound)
+
+	resp, err := handler.GetIncidents(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	mockAuthClient.AssertExpectations(t)
+	mockIncidentDetector.AssertExpectations(t)
+}
+
+// TestIncidentDtoToProto тестирует конвертацию Incident.
+func TestIncidentDtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts active incident", func(t *testing.T) {
+		startTime := time.Now().Add(-1 * time.Hour)
+
+		dtoResp := &dto.IncidentResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			StartTime: startTime,
+			EndTime:   nil,
+			Status:    "ACTIVE",
+			CreatedAt: time.Now(),
+		}
+
+		protoResp := handler.incidentDtoToProto(dtoResp)
+
+		assert.Equal(t, dtoResp.ID, protoResp.Id)
+		assert.Equal(t, dtoResp.MonitorID, protoResp.MonitorId)
+		assert.Equal(t, "ACTIVE", protoResp.Status)
+		assert.Nil(t, protoResp.EndTime)
+		assert.Equal(t, int32(0), protoResp.DurationSeconds)
+	})
+
+	t.Run("converts resolved incident", func(t *testing.T) {
+		startTime := time.Now().Add(-2 * time.Hour)
+		endTime := time.Now().Add(-1 * time.Hour)
+		duration := 3600
+
+		dtoResp := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       startTime,
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoResp := handler.incidentDtoToProto(dtoResp)
+
+		assert.Equal(t, "RESOLVED", protoResp.Status)
+		assert.NotNil(t, protoResp.EndTime)
+		assert.Equal(t, int32(3600), protoResp.DurationSeconds)
+	})
+
+	t.Run("converts incident with zero duration", func(t *testing.T) {
+		endTime := time.Now()
+		duration := 0
+
+		dtoResp := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       time.Now().Add(-1 * time.Hour),
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoResp := handler.incidentDtoToProto(dtoResp)
+
+		assert.Equal(t, "RESOLVED", protoResp.Status)
+		assert.NotNil(t, protoResp.EndTime)
+		assert.Equal(t, int32(0), protoResp.DurationSeconds)
+	})
+}
+
+// TestMonitorStatuses тестирует все статусы монитора.
+func TestMonitorStatuses(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	statuses := []string{"PENDING", "UP", "DOWN", "DEGRADED", "PAUSED"}
+
+	for _, status := range statuses {
+		t.Run("status "+status, func(t *testing.T) {
+			dtoResp := &dto.MonitorResponse{
+				ID:              uuid.New().String(),
+				UserID:          "user-123",
+				Name:            status + " Monitor",
+				URL:             "https://example.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 60,
+				TimeoutSeconds:  30,
+				Status:          status,
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			}
+
+			protoResp := handler.dtoToProto(dtoResp)
+			assert.Equal(t, status, protoResp.Status)
+		})
+	}
+}
+
+// TestCheckResultStatuses тестирует все статусы check results.
+func TestCheckResultStatuses(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	statuses := []string{"PENDING", "UP", "DOWN", "DEGRADED", "PAUSED"}
+
+	for _, status := range statuses {
+		t.Run("status "+status, func(t *testing.T) {
+			dtoResp := &dto.CheckResultResponse{
+				ID:        uuid.New().String(),
+				MonitorID: uuid.New().String(),
+				Status:    status,
+				CheckedAt: time.Now(),
+				CreatedAt: time.Now(),
+			}
+
+			protoResp := handler.checkResultDtoToProto(dtoResp)
+			assert.Equal(t, status, protoResp.Status)
+		})
+	}
+}
+
+// TestIncidentStatuses тестирует все статусы инцидентов.
+func TestIncidentStatuses(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	statuses := []string{"ACTIVE", "RESOLVED"}
+
+	for _, status := range statuses {
+		t.Run("status "+status, func(t *testing.T) {
+			dtoResp := &dto.IncidentResponse{
+				ID:        uuid.New().String(),
+				MonitorID: uuid.New().String(),
+				StartTime: time.Now().Add(-1 * time.Hour),
+				EndTime:   nil,
+				Status:    status,
+				CreatedAt: time.Now(),
+			}
+
+			protoResp := handler.incidentDtoToProto(dtoResp)
+			assert.Equal(t, status, protoResp.Status)
+		})
+	}
+}
+
+// TestWorkingDays тестирует обработку рабочих дней.
+func TestWorkingDays(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts all working days", func(t *testing.T) {
+		allDays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "All Days Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			WorkingDays:     allDays,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+		assert.Len(t, protoResp.WorkingDays, 7)
+		assert.Equal(t, "Sun", protoResp.WorkingDays[0])
+		assert.Equal(t, "Sat", protoResp.WorkingDays[6])
+	})
+
+	t.Run("converts business days only", func(t *testing.T) {
+		businessDays := []string{"Mon", "Tue", "Wed", "Thu", "Fri"}
+
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "Business Days Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			WorkingDays:     businessDays,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+		assert.Len(t, protoResp.WorkingDays, 5)
+		assert.Equal(t, "Mon", protoResp.WorkingDays[0])
+		assert.Equal(t, "Fri", protoResp.WorkingDays[4])
+	})
+
+	t.Run("converts empty working days", func(t *testing.T) {
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "No Working Days",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			WorkingDays:     []string{},
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+		assert.NotNil(t, protoResp.WorkingDays)
+		assert.Len(t, protoResp.WorkingDays, 0)
+	})
+}
+
+// TestErrorMapping тестирует отображение ошибок.
+func TestErrorMapping(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("maps repository errors to gRPC codes", func(t *testing.T) {
+		errorMappings := []struct {
+			name           string
+			domainError    error
+			expectedCode   codes.Code
+			shouldContain  string
+		}{
+			{
+				name:          "ErrMonitorNotFound",
+				domainError:   interfaces.ErrMonitorNotFound,
+				expectedCode:  codes.NotFound,
+				shouldContain: "not found",
+			},
+			{
+				name:          "ErrMonitorAlreadyExists",
+				domainError:   interfaces.ErrMonitorAlreadyExists,
+				expectedCode:  codes.AlreadyExists,
+				shouldContain: "already exists",
+			},
+		}
+
+		for _, tc := range errorMappings {
+			t.Run(tc.name, func(t *testing.T) {
+				err := handler.handleError(tc.domainError)
+				assert.Error(t, err)
+				assert.Equal(t, tc.expectedCode, status.Code(err))
+				assert.Contains(t, status.Convert(err).Message(), tc.shouldContain)
+			})
+		}
+	})
+}
+
+// TestTimestampConversion тестирует конвертацию временных меток.
+func TestTimestampConversion(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles UTC timestamps", func(t *testing.T) {
+		now := time.Now().UTC()
+
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "UTC Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+		assert.NotNil(t, protoResp.CreatedAt)
+		assert.NotNil(t, protoResp.UpdatedAt)
+		assert.True(t, protoResp.CreatedAt.IsValid())
+		assert.True(t, protoResp.UpdatedAt.IsValid())
+	})
+
+	t.Run("handles nil LastCheckAt", func(t *testing.T) {
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          "user-123",
+			Name:            "Never Checked Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "PENDING",
+			LastCheckAt:     nil,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+		assert.False(t, protoResp.LastCheckAt.IsValid())
+	})
+
+	t.Run("handles old and recent timestamps", func(t *testing.T) {
+		oldTime := time.Now().Add(-30 * 24 * time.Hour) // 30 days ago
+		recentTime := time.Now().Add(-1 * time.Minute)  // 1 minute ago
+
+		dtoResp := &dto.CheckResultResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			Status:    "UP",
+			CheckedAt: oldTime,
+			CreatedAt: recentTime,
+		}
+
+		protoResp := handler.checkResultDtoToProto(dtoResp)
+		assert.NotNil(t, protoResp.CheckedAt)
+		assert.NotNil(t, protoResp.CreatedAt)
+		assert.True(t, protoResp.CheckedAt.IsValid())
+		assert.True(t, protoResp.CreatedAt.IsValid())
+	})
+}
+
+// TestResponseStructures тестирует структуры ответов.
+func TestResponseStructures(t *testing.T) {
+	t.Run("Empty response", func(t *testing.T) {
+		resp := &emptypb.Empty{}
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("CreateMonitorResponse structure", func(t *testing.T) {
+		resp := &monitov1.CreateMonitorResponse{
+			Monitor: &monitov1.Monitor{
+				Id:              uuid.New().String(),
+				Name:            "Test Monitor",
+				Url:             "https://example.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 60,
+				TimeoutSeconds:  30,
+				Status:          "PENDING",
+			},
+		}
+
+		assert.NotNil(t, resp.Monitor)
+		assert.NotEmpty(t, resp.Monitor.Id)
+		assert.Equal(t, "Test Monitor", resp.Monitor.Name)
+	})
+
+	t.Run("ListMonitorsResponse structure", func(t *testing.T) {
+		resp := &monitov1.ListMonitorsResponse{
+			Monitors: []*monitov1.Monitor{
+				{
+					Id:     uuid.New().String(),
+					Name:   "Monitor 1",
+					Status: "UP",
+				},
+			},
+			Total:  1,
+			Limit:  100,
+			Offset: 0,
+		}
+
+		assert.Len(t, resp.Monitors, 1)
+		assert.Equal(t, int32(1), resp.Total)
+		assert.Equal(t, int32(100), resp.Limit)
+	})
+}
+
+// TestStatusCodes тестирует коды статусов gRPC.
+func TestStatusCodes(t *testing.T) {
+	t.Run("NotFound status", func(t *testing.T) {
+		st := status.Error(codes.NotFound, "monitor not found")
+		assert.Equal(t, codes.NotFound, status.Code(st))
+	})
+
+	t.Run("AlreadyExists status", func(t *testing.T) {
+		st := status.Error(codes.AlreadyExists, "monitor already exists")
+		assert.Equal(t, codes.AlreadyExists, status.Code(st))
+	})
+
+	t.Run("InvalidArgument status", func(t *testing.T) {
+		st := status.Error(codes.InvalidArgument, "validation failed")
+		assert.Equal(t, codes.InvalidArgument, status.Code(st))
+	})
+
+	t.Run("Unauthenticated status", func(t *testing.T) {
+		st := status.Error(codes.Unauthenticated, "invalid token")
+		assert.Equal(t, codes.Unauthenticated, status.Code(st))
+	})
+
+	t.Run("Internal status", func(t *testing.T) {
+		st := status.Error(codes.Internal, "internal server error")
+		assert.Equal(t, codes.Internal, status.Code(st))
+	})
+}
+
+// TestMetadataHandling тестирует обработку metadata.
+func TestMetadataHandling(t *testing.T) {
+	t.Run("creates incoming context with metadata", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer token"))
+		
+		md, ok := metadata.FromIncomingContext(ctx)
+		assert.True(t, ok)
+		assert.NotNil(t, md)
+		
+		values := md.Get("authorization")
+		assert.Len(t, values, 1)
+		assert.Equal(t, "Bearer token", values[0])
+	})
+
+	t.Run("handles missing metadata", func(t *testing.T) {
+		ctx := context.Background()
+		
+		_, ok := metadata.FromIncomingContext(ctx)
+		assert.False(t, ok)
+	})
+
+	t.Run("handles empty metadata", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{})
+		
+		md, ok := metadata.FromIncomingContext(ctx)
+		assert.True(t, ok)
+		assert.NotNil(t, md)
+		assert.Empty(t, md.Get("authorization"))
+	})
+}

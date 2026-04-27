@@ -1,0 +1,17 @@
+package {{package_name}}
+
+import "testing"
+
+func Test{{constructor_name}}(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+
+	// Act
+	got := {{constructor_name}}(Config{})
+
+	// Assert
+	if got == nil {
+		t.Fatal("expected adapter instance")
+	}
+}

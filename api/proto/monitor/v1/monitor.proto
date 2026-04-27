@@ -1,0 +1,288 @@
+syntax = "proto3";
+
+package monitor.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/raul/monitor/api/proto/monitor/v1;monitov1";
+
+// epic=01_monitoring, us=01_monitor_management
+service MonitorService {
+  // uc=01_monitor_creation
+  rpc CreateMonitor(CreateMonitorRequest) returns (CreateMonitorResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors"
+      body: "*"
+    };
+  }
+
+  // uc=02_monitor_retrieval
+  rpc GetMonitor(GetMonitorRequest) returns (GetMonitorResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{id}"
+    };
+  }
+
+  // uc=03_monitor_listing
+  rpc ListMonitors(ListMonitorsRequest) returns (ListMonitorsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}/monitors"
+    };
+  }
+
+  // uc=04_monitor_update
+  rpc UpdateMonitor(UpdateMonitorRequest) returns (UpdateMonitorResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/monitors/{id}"
+      body: "*"
+    };
+  }
+
+  // uc=05_monitor_deletion
+  rpc DeleteMonitor(DeleteMonitorRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/monitors/{id}"
+    };
+  }
+
+  // uc=06_monitor_pause
+  rpc PauseMonitor(PauseMonitorRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{id}/pause"
+    };
+  }
+
+  // uc=07_monitor_resume
+  rpc ResumeMonitor(ResumeMonitorRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{id}/resume"
+    };
+  }
+
+  // uc=08_monitor_history
+  rpc GetMonitorHistory(GetMonitorHistoryRequest) returns (GetMonitorHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/history"
+    };
+  }
+
+  // uc=09_uptime_statistics
+  rpc GetUptimeStats(GetUptimeStatsRequest) returns (GetUptimeStatsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/uptime"
+    };
+  }
+
+  // uc=10_incidents_retrieval
+  rpc GetIncidents(GetIncidentsRequest) returns (GetIncidentsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/incidents"
+    };
+  }
+
+  // uc_06_02_07: Получение raw check results для аналитики и reporting
+  rpc GetCheckResults(GetCheckResultsRequest) returns (GetCheckResultsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/check-results"
+    };
+  }
+}
+
+// Monitor представляет HTTP/HTTPS монитор.
+message Monitor {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string url = 4;
+  string check_type = 5;
+  int32 interval_seconds = 6;
+  int32 timeout_seconds = 7;
+  string status = 8;
+  string working_hours_start = 9;
+  string working_hours_end = 10;
+  repeated string working_days = 11;
+  int32 degraded_response_time_threshold = 12;
+  int32 degraded_failure_rate_threshold = 13;
+  google.protobuf.Timestamp last_check_at = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+// CreateMonitorRequest
+message CreateMonitorRequest {
+  string name = 1;
+  string url = 2;
+  string check_type = 3;
+  int32 interval_seconds = 4;
+  int32 timeout_seconds = 5;
+  string working_hours_start = 6;
+  string working_hours_end = 7;
+  repeated string working_days = 8;
+  int32 degraded_response_time_threshold = 9;
+  int32 degraded_failure_rate_threshold = 10;
+}
+
+// CreateMonitorResponse
+message CreateMonitorResponse {
+  Monitor monitor = 1;
+}
+
+// GetMonitorRequest
+message GetMonitorRequest {
+  string id = 1;
+}
+
+// GetMonitorResponse
+message GetMonitorResponse {
+  Monitor monitor = 1;
+}
+
+// ListMonitorsRequest
+message ListMonitorsRequest {
+  string user_id = 1;
+  string status = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// ListMonitorsResponse
+message ListMonitorsResponse {
+  repeated Monitor monitors = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// UpdateMonitorRequest
+message UpdateMonitorRequest {
+  string id = 1;
+  string name = 2;
+  string url = 3;
+  int32 interval_seconds = 4;
+  int32 timeout_seconds = 5;
+  string working_hours_start = 6;
+  string working_hours_end = 7;
+  repeated string working_days = 8;
+  int32 degraded_response_time_threshold = 9;
+  int32 degraded_failure_rate_threshold = 10;
+}
+
+// UpdateMonitorResponse
+message UpdateMonitorResponse {
+  Monitor monitor = 1;
+}
+
+// DeleteMonitorRequest
+message DeleteMonitorRequest {
+  string id = 1;
+}
+
+// PauseMonitorRequest
+message PauseMonitorRequest {
+  string id = 1;
+}
+
+// ResumeMonitorRequest
+message ResumeMonitorRequest {
+  string id = 1;
+}
+
+// GetMonitorHistoryRequest
+message GetMonitorHistoryRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// GetMonitorHistoryResponse
+message GetMonitorHistoryResponse {
+  repeated CheckResult results = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// CheckResult представляет результат проверки.
+message CheckResult {
+  string id = 1;
+  string monitor_id = 2;
+  string status = 3;
+  int32 response_time_ms = 4;
+  int32 status_code = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp checked_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// GetUptimeStatsRequest
+message GetUptimeStatsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+// GetUptimeStatsResponse
+message GetUptimeStatsResponse {
+  double uptime = 1;
+  int32 total_checks = 2;
+  int32 up_checks = 3;
+  int32 degraded_checks = 4;
+  int32 down_checks = 5;
+  int32 paused_checks = 6;
+  int64 total_downtime = 7;
+  int32 average_response_time = 8;
+  int32 incidents = 9;
+  string note = 10;
+  int32 p50 = 11;
+  int32 p95 = 12;
+  int32 p99 = 13;
+}
+
+// GetIncidentsRequest
+message GetIncidentsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// GetIncidentsResponse
+message GetIncidentsResponse {
+  repeated Incident incidents = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// Incident представляет инцидент недоступности.
+message Incident {
+  string id = 1;
+  string monitor_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int32 duration_seconds = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// GetCheckResultsRequest возвращает raw check results за период для аналитики.
+message GetCheckResultsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// GetCheckResultsResponse содержит paginated check results.
+message GetCheckResultsResponse {
+  repeated CheckResult results = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}

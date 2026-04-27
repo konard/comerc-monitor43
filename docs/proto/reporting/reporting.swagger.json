@@ -1,0 +1,646 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/reporting/reporting.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ReportingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/reports/analytics/check-count/{monitor_id}": {
+      "get": {
+        "summary": "uc_06_02_07: Получение распределения проверок по статус-кодам",
+        "operationId": "ReportingService_GetCheckCountByStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingGetCheckCountByStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/analytics/incidents/{monitor_id}": {
+      "get": {
+        "summary": "uc_06_02_04: Получение инцидентов за период",
+        "operationId": "ReportingService_GetIncidentsReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingGetIncidentsReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/analytics/response-time/{monitor_id}": {
+      "get": {
+        "summary": "uc_06_02_01: Получение метрик response time за период",
+        "operationId": "ReportingService_GetResponseTimeMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingResponseTimeMetricsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/export/csv/{monitor_id}": {
+      "get": {
+        "summary": "uc_06_02_06: Экспорт отчёта в CSV",
+        "operationId": "ReportingService_ExportReportCSV",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingExportReportCSVResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/export/pdf/{report_id}": {
+      "get": {
+        "summary": "uc_06_01_05: Экспорт SLA отчёта в PDF",
+        "operationId": "ReportingService_ExportReportPDF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingExportReportPDFResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/sla": {
+      "get": {
+        "summary": "uc_06_01_04: Получение списка SLA отчётов",
+        "operationId": "ReportingService_ListSLAReports",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingListSLAReportsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      },
+      "post": {
+        "summary": "uc_06_01_01: Генерация SLA отчёта за период",
+        "operationId": "ReportingService_GenerateSLAReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingSLAReport"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "GenerateSLAReportRequest запрос на генерацию SLA отчёта.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/reportingGenerateSLAReportRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    },
+    "/api/v1/reports/sla/{report_id}": {
+      "get": {
+        "summary": "uc_06_01_04: Получение SLA отчёта по ID",
+        "operationId": "ReportingService_GetSLAReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/reportingSLAReport"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ReportingService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "reportingExportReportCSVResponse": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "format": "byte"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "ExportReportCSVResponse ответ с CSV данными."
+    },
+    "reportingExportReportPDFResponse": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "format": "byte"
+        },
+        "filename": {
+          "type": "string"
+        }
+      },
+      "description": "ExportReportPDFResponse ответ с PDF данными."
+    },
+    "reportingGenerateSLAReportRequest": {
+      "type": "object",
+      "properties": {
+        "monitor_id": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "GenerateSLAReportRequest запрос на генерацию SLA отчёта."
+    },
+    "reportingGetCheckCountByStatusResponse": {
+      "type": "object",
+      "properties": {
+        "monitor_id": {
+          "type": "string"
+        },
+        "status_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/reportingStatusCount"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "GetCheckCountByStatusResponse ответ с распределением проверок."
+    },
+    "reportingGetIncidentsReportResponse": {
+      "type": "object",
+      "properties": {
+        "incidents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/reportingIncidentReport"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "offset": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "GetIncidentsReportResponse ответ с инцидентами."
+    },
+    "reportingIncidentReport": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_seconds": {
+          "type": "string",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "failed_checks": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "IncidentReport представляет инцидент в отчёте."
+    },
+    "reportingListSLAReportsResponse": {
+      "type": "object",
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/reportingSLAReport"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "offset": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "ListSLAReportsResponse ответ со списком SLA отчётов."
+    },
+    "reportingResponseTimeMetricsResponse": {
+      "type": "object",
+      "properties": {
+        "monitor_id": {
+          "type": "string"
+        },
+        "p50": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "p95": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "p99": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "average": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "min": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "max": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total_checks": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "ResponseTimeMetricsResponse ответ с метриками response time."
+    },
+    "reportingSLAReport": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "monitor_name": {
+          "type": "string"
+        },
+        "period_start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "period_end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "availability": {
+          "type": "number",
+          "format": "double"
+        },
+        "total_checks": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "up_checks": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "down_checks": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "degraded_checks": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "paused_checks": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total_downtime_seconds": {
+          "type": "string",
+          "format": "int64"
+        },
+        "incidents_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "SLAReport представляет SLA отчёт."
+    },
+    "reportingStatusCount": {
+      "type": "object",
+      "properties": {
+        "status_group": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "StatusCount количество проверок для группы статус-кодов."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

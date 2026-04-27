@@ -1,0 +1,50 @@
+{
+  "skill_name": "x-mockery",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "В сервисе есть зависимость repo, сейчас в тесте пытаются мокать весь внешний adapter interface. Нужно выделить локальный интерфейс у потребителя, добавить пакет в .mockery.yml и показать, как сгенерировать mockery v3 мок.",
+      "expected_output": "Агент переводит решение в consumer-side mockery v3 workflow: локальный интерфейс у потребителя, корневой .mockery.yml, централизованная генерация и post-check результата.",
+      "files": [],
+      "expectations": [
+        "Ответ требует объявить локальный интерфейс у потребителя, а не в пакете поставщика",
+        "Ответ требует использовать корневой .mockery.yml как источник правды",
+        "Ответ не рекомендует //go:generate над интерфейсом",
+        "Ответ связывает генерацию с task mock или go run github.com/vektra/mockery/v3@latest"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Нужно обновить юнит-тест на mockery v3: мок создаётся через NewType(t), ожидание одного вызова Save, и ещё нужен пример RunAndReturn для GetByID.",
+      "expected_output": "Агент показывает EXPECT() API для mockery v3 + testify: NewType(t), одиночный вызов без .Once() и типизированный RunAndReturn для результата от аргументов.",
+      "files": [],
+      "expectations": [
+        "Ответ использует конструктор вида NewType(t) вместе с EXPECT()",
+        "Ответ запрещает или убирает .Once() для одиночного вызова",
+        "Ответ связывает RunAndReturn с типизированной функцией от аргументов вызова"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "После task mock неясно, правильно ли сгенерировался mock. Нужен короткий checklist проверки, запрет на ручную правку generated файла и способ быстро проверить результат.",
+      "expected_output": "Агент даёт post-check checklist, запрещает ручную правку generated mocks и ведёт к bundled validator script.",
+      "files": [],
+      "expectations": [
+        "Ответ проверяет наличие файла в mocks/ рядом с пакетом интерфейса",
+        "Ответ проверяет наличие EXPECT() и NewType(t)",
+        "Ответ явно запрещает ручную правку generated mocks",
+        "Ответ указывает на scripts/check-mockery-targets.sh"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Зависимость передаётся как callback-функция, но разработчик хочет прогнать её через mockery. Что делать?",
+      "expected_output": "Агент не тащит callback-case в mockery и переводит его в callback boundary внутри x-unit-test-partial-interface.",
+      "files": [],
+      "expectations": [
+        "Ответ не рекомендует использовать mockery для callback dependency",
+        "Ответ переводит сценарий в callback section x-unit-test-partial-interface или эквивалентный callback approach"
+      ]
+    }
+  ]
+}

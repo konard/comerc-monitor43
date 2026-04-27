@@ -1,0 +1,16 @@
+{
+  "severity": "medium",
+  "confidence": "medium",
+  "exclude": [
+    "G104",
+    "G307"
+  ],
+  "exclude-generated": true,
+  "exclude-dirs": [
+    "vendor",
+    "testdata",
+    "examples"
+  ],
+  "tests": true,
+  "no-fail": false
+}

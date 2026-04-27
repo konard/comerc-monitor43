@@ -1,0 +1,129 @@
+# Матрица тестирования — {{service_name}}
+
+## Контекст
+
+{{service_summary}}
+
+**Архитектура:**
+- `{{package_path_1}}` — {{package_summary_1}}
+- `{{package_path_2}}` — {{package_summary_2}}
+- `{{package_path_3}}` — {{package_summary_3}}
+
+**Структура тестов:**
+- `internal/**/*_test.go` — юнит-тесты рядом с исходниками, `t.Parallel()`
+- `test/integration/*_test.go` — интеграционные тесты, `testing.Short()` skip
+- `test/bdd/steps/*_test.go` + `test/bdd/features/` — BDD-тесты, `testing.Short()` skip
+- `test/e2e/*_test.go` — e2e-тесты, build tag `e2e`
+- `test/smoke/*_test.go` — смоук-тесты, build tag `smoke`
+
+---
+
+## Покрытие по пакетам
+
+| Пакет | Unit-тесты | Интеграция |
+|-------|-----------|------------|
+| {{package_1}} | {{unit_status_1}} | {{integration_status_1}} |
+| {{package_2}} | {{unit_status_2}} | {{integration_status_2}} |
+| {{package_3}} | {{unit_status_3}} | {{integration_status_3}} |
+
+---
+
+## Unit-тесты (internal/)
+
+### {{unit_section_name_1}} ({{unit_section_path_1}})
+
+Файл: `{{unit_test_file_1}}` {{unit_file_status_1}}
+
+| ID | Тест | Статус |
+|----|------|--------|
+| {{unit_test_id_1}} | {{unit_test_name_1}} | {{unit_test_status_1}} |
+| {{unit_test_id_2}} | {{unit_test_name_2}} | {{unit_test_status_2}} |
+
+---
+
+### {{unit_section_name_2}} ({{unit_section_path_2}})
+
+Файл: `{{unit_test_file_2}}` {{unit_file_status_2}}
+
+| ID | Тест | Статус |
+|----|------|--------|
+| {{unit_test_id_3}} | {{unit_test_name_3}} | {{unit_test_status_3}} |
+| {{unit_test_id_4}} | {{unit_test_name_4}} | {{unit_test_status_4}} |
+
+---
+
+## Интеграционные тесты (test/integration/)
+
+Требуют: {{integration_requirements}}. Skip: `testing.Short()`.
+
+### {{integration_section_name_1}} ({{integration_test_file_1}})
+
+| ID | Тест | Статус |
+|----|------|--------|
+| {{integration_test_id_1}} | {{integration_test_name_1}} | {{integration_test_status_1}} |
+| {{integration_test_id_2}} | {{integration_test_name_2}} | {{integration_test_status_2}} |
+
+---
+
+## BDD-тесты (test/bdd/)
+
+Требуют: {{bdd_requirements}}. Skip: `testing.Short()`.
+
+### {{bdd_section_name_1}}
+
+Feature: `{{bdd_feature_file_1}}`  
+Steps: `{{bdd_steps_file_1}}`
+
+| ID | Сценарий | Статус |
+|----|----------|--------|
+| {{bdd_test_id_1}} | {{bdd_test_name_1}} | {{bdd_test_status_1}} |
+| {{bdd_test_id_2}} | {{bdd_test_name_2}} | {{bdd_test_status_2}} |
+
+---
+
+## E2E-тесты (test/e2e/)
+
+Требуют: {{e2e_requirements}}. Build tag: `e2e`.
+
+Файл: `{{e2e_test_file_1}}` {{e2e_file_status_1}}
+
+| ID | Тест | Статус |
+|----|------|--------|
+| {{e2e_test_id_1}} | {{e2e_test_name_1}} | {{e2e_test_status_1}} |
+| {{e2e_test_id_2}} | {{e2e_test_name_2}} | {{e2e_test_status_2}} |
+
+---
+
+## Смоук-тесты (test/smoke/)
+
+Требуют: {{smoke_requirements}}. Build tag: `smoke`.
+
+Файл: `{{smoke_test_file_1}}` {{smoke_file_status_1}}
+
+| ID | Тест | Статус |
+|----|------|--------|
+| {{smoke_test_id_1}} | {{smoke_test_name_1}} | {{smoke_test_status_1}} |
+| {{smoke_test_id_2}} | {{smoke_test_name_2}} | {{smoke_test_status_2}} |
+
+---
+
+## Сводная таблица
+
+| Пакет | Unit | Integration/E2E | Smoke |
+|-------|------|-----------------|-------|
+| {{summary_package_1}} | {{summary_unit_1}} | {{summary_integration_1}} | {{summary_smoke_1}} |
+| {{summary_package_2}} | {{summary_unit_2}} | {{summary_integration_2}} | {{summary_smoke_2}} |
+| {{summary_package_3}} | {{summary_unit_3}} | {{summary_integration_3}} | {{summary_smoke_3}} |
+| **Итого** | **{{summary_total_unit}}** | **{{summary_total_integration}}** | **{{summary_total_smoke}}** |
+
+---
+
+## Покрытие кода
+
+Снято командой `task cover`. Общее покрытие: **{{coverage_total}}**.
+
+| Пакет | Покрытие | Примечание |
+|-------|----------|------------|
+| {{coverage_package_1}} | {{coverage_percent_1}} | {{coverage_note_1}} |
+| {{coverage_package_2}} | {{coverage_percent_2}} | {{coverage_note_2}} |
+| {{coverage_package_3}} | {{coverage_percent_3}} | {{coverage_note_3}} |

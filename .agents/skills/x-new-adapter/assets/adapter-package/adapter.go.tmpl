@@ -1,0 +1,11 @@
+package {{package_name}}
+
+// {{type_name}} реализует инфраструктурный адаптер.
+type {{type_name}} struct {
+	cfg Config
+}
+
+// {{constructor_name}} создаёт новый адаптер.
+func {{constructor_name}}(cfg Config) *{{type_name}} {
+	return &{{type_name}}{cfg: cfg}
+}

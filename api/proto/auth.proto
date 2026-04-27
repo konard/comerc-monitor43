@@ -1,0 +1,354 @@
+// epic=02_authentication, us=01_user_authentication
+// Authentication service for user management and auth operations
+
+syntax = "proto3";
+
+package auth;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/api/annotations.proto";
+
+// Auth service provides authentication and user management
+service AuthService {
+  // uc_02_01_01: Register a new user account
+  rpc Register(RegisterRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/register"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_02: Authenticate with email and password
+  rpc PasswordLogin(PasswordLoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_03: Authenticate with OAuth token
+  rpc OAuthLogin(OAuthLoginRequest) returns (OAuthLoginResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/oauth/login"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_04: Handle OAuth callback
+  rpc OAuthCallback(OAuthCallbackRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/oauth/callback"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_05: Validate access token (internal gRPC only)
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // uc_02_01_06: Refresh access token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/token/refresh"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_07: Logout user
+  rpc Logout(LogoutRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/logout"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_01: Get current user profile
+  rpc GetUser(GetUserRequest) returns (common.User) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}"
+    };
+  }
+
+  // uc_02_02_02: Update user profile
+  rpc UpdateUser(UpdateUserRequest) returns (common.User) {
+    option (google.api.http) = {
+      patch: "/api/v1/users/me"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_03: List user sessions
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}/sessions"
+      additional_bindings {
+        get: "/api/v1/sessions"
+      }
+    };
+  }
+
+  // uc_02_02_04: Revoke user session
+  rpc RevokeSession(RevokeSessionRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/sessions/{session_id}"
+    };
+  }
+
+  // uc_02_03_01: Lock user account (admin gRPC only)
+  rpc LockAccount(LockAccountRequest) returns (common.Empty);
+
+  // uc_02_03_02: Unlock user account (admin gRPC only)
+  rpc UnlockAccount(UnlockAccountRequest) returns (common.Empty);
+
+  // === Team management (epic=05_security, us=02_team_management) ===
+
+  // uc_05_02_02: Invite a new member to the organization
+  rpc InviteMember(InviteMemberRequest) returns (Invite) {
+    option (google.api.http) = {
+      post: "/api/v1/team/invites"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_15: Revoke a pending invite
+  rpc RevokeInvite(RevokeInviteRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/team/invites/{invite_id}"
+    };
+  }
+
+  // uc_05_02_10: Accept an invite by token
+  rpc AcceptInvite(AcceptInviteRequest) returns (Membership) {
+    option (google.api.http) = {
+      post: "/api/v1/team/invites/{token}/accept"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_16: List members of the current organization
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/team/members"
+    };
+  }
+
+  // uc_05_02_17: Change role of a member
+  rpc ChangeMemberRole(ChangeMemberRoleRequest) returns (Membership) {
+    option (google.api.http) = {
+      patch: "/api/v1/team/members/{user_id}/role"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_20: Remove a member from the organization
+  rpc RemoveMember(RemoveMemberRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/team/members/{user_id}"
+    };
+  }
+
+  // uc_05_02_22: Transfer OWNER role to another member
+  rpc TransferOwnership(TransferOwnershipRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/team/ownership/transfer"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_23: Current user leaves the organization
+  rpc LeaveOrganization(LeaveOrganizationRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/team/leave"
+      body: "*"
+    };
+  }
+}
+
+// Request/Response messages
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string full_name = 3;
+}
+
+message PasswordLoginRequest {
+  string email = 1;
+  string password = 2;
+  string ip_address = 3;
+  string user_agent = 4;
+}
+
+message OAuthLoginRequest {
+  string provider = 1;
+  string redirect_uri = 2;
+}
+
+message OAuthLoginResponse {
+  string auth_url = 1;  // URL to redirect user to for OAuth authorization
+  string state = 2;     // State parameter for CSRF protection
+}
+
+message OAuthCallbackRequest {
+  string code = 1;
+  string state = 2;
+  string redirect_uri = 3;
+  string ip_address = 4;
+  string user_agent = 5;
+}
+
+message ValidateTokenRequest {
+  string access_token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  string tier = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;  // seconds
+  common.User user = 4;
+}
+
+message AuthResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;  // seconds
+  string token_type = 4;  // e.g., "Bearer"
+  common.User user = 5;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message UpdateUserRequest {
+  string full_name = 1;
+  string email = 2;
+}
+
+message ListSessionsRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListSessionsResponse {
+  repeated common.Session sessions = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+  string session_id = 2;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+}
+
+message LockAccountRequest {
+  string user_id = 1;
+  int64 lock_duration_hours = 2;
+}
+
+message UnlockAccountRequest {
+  string user_id = 1;
+}
+
+// === Team management messages (us=05_02_team_management) ===
+
+// Role перечисляет допустимые роли участника организации.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_OWNER = 1;
+  ROLE_ADMIN = 2;
+  ROLE_MEMBER = 3;
+  ROLE_VIEWER = 4;
+}
+
+// InviteStatus перечисляет состояния приглашения.
+enum InviteStatus {
+  INVITE_STATUS_UNSPECIFIED = 0;
+  INVITE_STATUS_PENDING = 1;
+  INVITE_STATUS_ACCEPTED = 2;
+  INVITE_STATUS_DECLINED = 3;
+  INVITE_STATUS_EXPIRED = 4;
+  INVITE_STATUS_REVOKED = 5;
+}
+
+message Membership {
+  string id = 1;
+  string organization_id = 2;
+  string user_id = 3;
+  string email = 4;
+  string full_name = 5;
+  Role role = 6;
+  string joined_at = 7;     // ISO-8601
+  string last_active_at = 8; // ISO-8601, optional
+}
+
+message Invite {
+  string id = 1;
+  string organization_id = 2;
+  string inviter_id = 3;
+  string email = 4;
+  Role role = 5;
+  string token = 6;
+  InviteStatus status = 7;
+  string created_at = 8;   // ISO-8601
+  string expires_at = 9;   // ISO-8601
+}
+
+message InviteMemberRequest {
+  string email = 1;
+  Role role = 2;
+}
+
+message RevokeInviteRequest {
+  string invite_id = 1;
+}
+
+message AcceptInviteRequest {
+  string token = 1;
+}
+
+message ListMembersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListMembersResponse {
+  repeated Membership members = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ChangeMemberRoleRequest {
+  string user_id = 1;
+  Role role = 2;
+}
+
+message RemoveMemberRequest {
+  string user_id = 1;
+}
+
+message TransferOwnershipRequest {
+  string user_id = 1;
+}
+
+message LeaveOrganizationRequest {
+}

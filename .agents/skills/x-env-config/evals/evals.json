@@ -1,0 +1,41 @@
+{
+  "skill_name": "x-env-config",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Нужно добавить новый Config для adapter package: Host, Port, Timeout и secret token. Опиши, как оформить envconfig теги, defaults, doc.go и загрузку.",
+      "expected_output": "Агент ведёт через полный env-config workflow: имена переменных с префиксом компонента, Config struct, env.InitConfig, .env, doc.go и аккуратную работу с default/required.",
+      "files": [],
+      "expectations": [
+        "Ответ использует Config struct с envconfig тегами и осмысленным префиксом вроде REDIS_ или S3_",
+        "Ответ загружает конфиг через env.InitConfig",
+        "Ответ требует обновить .env или пример значений",
+        "Ответ синхронизирует переменные с doc.go",
+        "Секрет не помечается required автоматически без обсуждения local/noop режима"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Корневой config приложения содержит вложенные monitoring/http/grpc/database config. Как это документировать в doc.go, чтобы не утонуть в шуме?",
+      "expected_output": "Агент предлагает перечислить верхнеуровневые переменные и сослаться на вложенные конфиги там, где это уместно.",
+      "files": [],
+      "expectations": [
+        "Ответ явно описывает, как это документировать в doc.go",
+        "Ответ перечисляет верхнеуровневые env явно",
+        "Ответ не требует вручную дублировать вообще все env из вложенных конфигов",
+        "Ответ указывает, где смотреть nested config дальше"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Нужен unit-тест для конфигурации с t.Setenv. Какие проверки обязательны и можно ли делать t.Parallel()?",
+      "expected_output": "Агент предлагает тест defaults/parsing/required behavior и объясняет, что t.Setenv не совмещается с t.Parallel().",
+      "files": [],
+      "expectations": [
+        "Упомянуты default values и parsing checks",
+        "Сказано, что тест с t.Setenv не должен быть параллельным",
+        "Ответ рекомендует scripts/check-env-config.py как быстрый consistency check после изменений"
+      ]
+    }
+  ]
+}

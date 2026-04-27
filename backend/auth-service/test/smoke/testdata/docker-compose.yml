@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../../migrations:/migrations
+    command: ["-dir", "/migrations", "postgres", "postgres://auth:auth_password@postgres:5432/auth?sslmode=disable", "up"]
+    restart: "no"
+
+  auth-service:
+    build:
+      context: ../../../../..
+      dockerfile: backend/auth-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: "8080"
+      SERVER_GRPC_PORT: "5001"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: auth
+      DB_USER: auth
+      DB_PASSWORD: auth_password
+      DB_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      RABBITMQ_ENABLED: "false"
+      METRICS_ENABLED: "false"
+      JWT_SECRET: smoke-test-secret-key-minimum-32-chars
+      GOOGLE_CLIENT_ID: smoke-fake-client-id
+      GOOGLE_CLIENT_SECRET: smoke-fake-client-secret
+      GOOGLE_REDIRECT_URI: http://localhost/callback
+    ports:
+      - "8080"
+      - "5001"
+    restart: "no"

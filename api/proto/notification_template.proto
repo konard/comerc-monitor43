@@ -1,0 +1,303 @@
+// epic=05_notification_templates, us=01_template_management
+// Notification Template service for managing alert notification templates
+
+syntax = "proto3";
+
+package notification_template;
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/raul/monitor/api";
+
+// Notification Template service provides template management
+service NotificationTemplateService {
+  // uc_05_01_01: Create a new template
+  rpc CreateTemplate(CreateTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      post: "/api/v1/templates"
+      body: "*"
+    };
+  }
+
+  // uc_05_01_02: Get template by ID
+  rpc GetTemplate(GetTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      get: "/api/v1/templates/{id}"
+    };
+  }
+
+  // uc_05_01_03: List all templates with filtering
+  rpc ListTemplates(ListTemplatesRequest) returns (ListTemplatesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/templates"
+    };
+  }
+
+  // uc_05_01_04: Update template
+  rpc UpdateTemplate(UpdateTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      put: "/api/v1/templates/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_05_01_05: Delete template
+  rpc DeleteTemplate(DeleteTemplateRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/templates/{id}"
+    };
+  }
+
+  // uc_05_01_06: Clone template with new name
+  rpc CloneTemplate(CloneTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      post: "/api/v1/templates/{id}:clone"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_01: Render template with provided variables
+  rpc RenderTemplate(RenderTemplateRequest) returns (RenderedTemplate) {
+    option (google.api.http) = {
+      post: "/api/v1/templates/{template_id}:render"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_02: Validate template syntax
+  rpc ValidateTemplate(ValidateTemplateRequest) returns (ValidationResult) {
+    option (google.api.http) = {
+      post: "/api/v1/templates:validate"
+      body: "*"
+    };
+  }
+
+  // uc_05_02_03: Get available variables for template type
+  rpc GetAvailableVariables(GetAvailableVariablesRequest) returns (AvailableVariables) {
+    option (google.api.http) = {
+      get: "/api/v1/templates/variables"
+    };
+  }
+
+  // uc_05_03_01: Set template as default for channel/type
+  rpc SetDefaultTemplate(SetDefaultTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      post: "/api/v1/templates/{template_id}:set-default"
+      body: "*"
+    };
+  }
+
+  // uc_05_03_02: Get default template for channel/type
+  rpc GetDefaultTemplate(GetDefaultTemplateRequest) returns (Template) {
+    option (google.api.http) = {
+      get: "/api/v1/templates/default"
+    };
+  }
+
+  // uc_05_04_01: Preview template with sample data
+  rpc PreviewTemplate(PreviewTemplateRequest) returns (RenderedTemplate) {
+    option (google.api.http) = {
+      post: "/api/v1/templates:preview"
+      body: "*"
+    };
+  }
+}
+
+// Template channel enum
+enum TemplateChannel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_EMAIL = 1;           // Email notifications (subject + body)
+  CHANNEL_TELEGRAM = 2;        // Telegram messages
+  CHANNEL_WEBHOOK = 3;         // Webhook payloads (JSON)
+  CHANNEL_SLACK = 4;           // Slack messages
+  CHANNEL_DISCORD = 5;         // Discord messages
+  CHANNEL_SMS = 6;             // SMS notifications
+}
+
+// Template type enum (based on alert/event type)
+enum TemplateType {
+  TYPE_UNSPECIFIED = 0;
+  TYPE_MONITOR_UP = 1;         // Monitor recovered
+  TYPE_MONITOR_DOWN = 2;       // Monitor down alert
+  TYPE_MONITOR_DEGRADED = 3;   // Monitor degraded alert
+  TYPE_CERTIFICATE_EXPIRY = 4; // SSL certificate expiring
+  TYPE_FLAPPING_DETECTED = 5;  // Flapping state change
+  TYPE_INCIDENT_CREATED = 6;   // New incident created
+  TYPE_INCIDENT_RESOLVED = 7;  // Incident resolved
+  TYPE_MAINTENANCE_STARTED = 8; // Maintenance window started
+  TYPE_MAINTENANCE_ENDED = 9;   // Maintenance window ended
+  TYPE_CUSTOM = 10;            // Custom template
+}
+
+// Template engine enum
+enum TemplateEngine {
+  ENGINE_UNSPECIFIED = 0;
+  ENGINE_GOTEMPLATE = 1;       // Go template syntax (default)
+  ENGINE_JINJA2 = 2;           // Jinja2 syntax (future)
+  ENGINE_HANDLEBARS = 3;       // Handlebars syntax (future)
+}
+
+// Template entity
+message Template {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string description = 4;
+  TemplateChannel channel = 5;
+  TemplateType type = 6;
+  TemplateEngine engine = 7;
+
+  // Template content
+  string subject = 8;          // For email: subject line
+  string body = 9;             // Main template content
+  string format = 10;          // Output format: text, html, markdown, json
+
+  // Metadata
+  bool is_default = 11;
+  bool is_system = 12;         // System templates cannot be deleted
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+
+  // Template versioning
+  int32 version = 15;
+  string parent_id = 16;       // If cloned from another template
+}
+
+// Template variable definition
+message TemplateVariable {
+  string name = 1;             // Variable name, e.g., "monitor_name"
+  string description = 2;      // Human-readable description
+  string type = 3;             // Variable type: string, int, float, bool, timestamp, duration
+  bool required = 4;           // Whether variable is required
+  string example_value = 5;    // Example value for preview
+
+  // For nested objects
+  repeated string nested_fields = 6;
+}
+
+// Rendered template result
+message RenderedTemplate {
+  string subject = 1;          // Rendered subject (for email)
+  string body = 2;             // Rendered body content
+  string format = 3;           // Output format
+  bool success = 4;
+
+  // Validation/rendering errors
+  repeated string errors = 5;
+  repeated string warnings = 6;
+}
+
+// Validation result
+message ValidationResult {
+  bool valid = 1;
+  repeated string errors = 2;
+  repeated string warnings = 3;
+
+  // Detected variables in template
+  repeated string used_variables = 4;
+
+  // Missing required variables
+  repeated string missing_variables = 5;
+}
+
+// Available variables for a template type
+message AvailableVariables {
+  TemplateType type = 1;
+  repeated TemplateVariable variables = 2;
+}
+
+// Request/Response messages
+
+message CreateTemplateRequest {
+  string user_id = 1;
+  string name = 2;
+  string description = 3;
+  TemplateChannel channel = 4;
+  TemplateType type = 5;
+  TemplateEngine engine = 6;
+  string subject = 7;
+  string body = 8;
+  string format = 9;
+}
+
+message GetTemplateRequest {
+  string id = 1;
+}
+
+message ListTemplatesRequest {
+  string user_id = 1;
+  TemplateChannel channel = 2;    // Optional filter
+  TemplateType type = 3;          // Optional filter
+  bool is_default = 4;            // Optional filter
+  bool is_system = 5;             // Optional filter (include system templates)
+  int32 page = 6;
+  int32 page_size = 7;
+  string sort_by = 8;             // name, created_at, updated_at
+  bool sort_desc = 9;
+}
+
+message ListTemplatesResponse {
+  repeated Template templates = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateTemplateRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string subject = 4;
+  string body = 5;
+  string format = 6;
+}
+
+message DeleteTemplateRequest {
+  string id = 1;
+}
+
+message CloneTemplateRequest {
+  string id = 1;
+  string user_id = 2;
+  string new_name = 3;
+}
+
+message RenderTemplateRequest {
+  string template_id = 1;
+  map<string, string> variables = 2;  // Variable name -> value (as string)
+}
+
+message ValidateTemplateRequest {
+  TemplateChannel channel = 1;
+  TemplateType type = 2;
+  TemplateEngine engine = 3;
+  string subject = 4;
+  string body = 5;
+}
+
+message GetAvailableVariablesRequest {
+  TemplateType type = 1;
+  TemplateChannel channel = 2;  // Optional: channel-specific variables
+}
+
+message SetDefaultTemplateRequest {
+  string template_id = 1;
+  string user_id = 2;
+}
+
+message GetDefaultTemplateRequest {
+  string user_id = 1;
+  TemplateChannel channel = 2;
+  TemplateType type = 3;
+}
+
+message PreviewTemplateRequest {
+  TemplateChannel channel = 1;
+  TemplateType type = 2;
+  TemplateEngine engine = 3;
+  string subject = 4;
+  string body = 5;
+  string format = 6;
+}

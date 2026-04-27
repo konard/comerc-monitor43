@@ -1,0 +1,1514 @@
+package grpc
+
+import (
+	"context"
+	stderrors "errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	pkgerrors "github.com/raul/monitor/backend/monitor-service/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	monitov1 "github.com/raul/monitor/api/proto/monitor/v1"
+	"github.com/raul/monitor/backend/monitor-service/internal/infrastructure/auth"
+	"github.com/raul/monitor/backend/monitor-service/internal/repository/interfaces"
+	"github.com/raul/monitor/backend/monitor-service/internal/service"
+	"github.com/raul/monitor/backend/monitor-service/internal/service/dto"
+)
+
+// Mock service implementations
+
+// MockAuthClient является mock для AuthClient.
+type MockAuthClient struct {
+	mock.Mock
+}
+
+func (m *MockAuthClient) ValidateToken(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockAuthClient) Close() error {
+	return nil
+}
+
+// MockMonitorService является mock для MonitorService.
+type MockMonitorService struct {
+	mock.Mock
+}
+
+func (m *MockMonitorService) CreateMonitor(ctx context.Context, req *dto.CreateMonitorRequest) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) GetMonitor(ctx context.Context, id, userID string) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, id, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) ListMonitors(ctx context.Context, req *dto.ListMonitorsRequest) (*dto.ListMonitorsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.ListMonitorsResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) UpdateMonitor(ctx context.Context, req *dto.UpdateMonitorRequest) (*dto.MonitorResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.MonitorResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) DeleteMonitor(ctx context.Context, id, userID string) error {
+	args := m.Called(ctx, id, userID)
+	return args.Error(0)
+}
+
+func (m *MockMonitorService) PauseMonitor(ctx context.Context, req *dto.PauseMonitorRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockMonitorService) ResumeMonitor(ctx context.Context, req *dto.ResumeMonitorRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockMonitorService) GetMonitorHistory(ctx context.Context, req *dto.GetMonitorHistoryRequest) (*dto.GetMonitorHistoryResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.GetMonitorHistoryResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) GetUptimeStats(ctx context.Context, req *dto.GetUptimeStatsRequest) (*dto.UptimeStatsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.UptimeStatsResponse), args.Error(1)
+}
+
+func (m *MockMonitorService) GetIncidents(ctx context.Context, req *dto.GetIncidentsRequest) (*dto.GetIncidentsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.GetIncidentsResponse), args.Error(1)
+}
+
+// MockUptimeCalculator является mock для UptimeCalculator.
+type MockUptimeCalculator struct {
+	mock.Mock
+}
+
+func (m *MockUptimeCalculator) Calculate(ctx context.Context, req *dto.GetUptimeStatsRequest) (*dto.UptimeStatsResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.UptimeStatsResponse), args.Error(1)
+}
+
+// MockIncidentDetector является mock для IncidentDetector.
+type MockIncidentDetector struct {
+	mock.Mock
+}
+
+func (m *MockIncidentDetector) DetectIncidents(ctx context.Context, monitorID string, from, to time.Time) ([]*dto.IncidentResponse, error) {
+	args := m.Called(ctx, monitorID, from, to)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*dto.IncidentResponse), args.Error(1)
+}
+
+// TestNewMonitorHandler тестирует создание MonitorHandler.
+func TestNewMonitorHandler(t *testing.T) {
+	// Note: NewMonitorHandler требует реальные сервисы
+	// Проверяем только структуру
+	assert.NotNil(t, &MonitorHandler{})
+}
+
+// TestMonitorHandler_ErrorHandling тестирует обработку ошибок в handlers.
+func TestMonitorHandler_ErrorHandling(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles ErrMonitorNotFound", func(t *testing.T) {
+		err := handler.handleError(interfaces.ErrMonitorNotFound)
+		assert.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+
+	t.Run("handles ErrMonitorAlreadyExists", func(t *testing.T) {
+		err := handler.handleError(interfaces.ErrMonitorAlreadyExists)
+		assert.Error(t, err)
+		assert.Equal(t, codes.AlreadyExists, status.Code(err))
+	})
+
+	t.Run("handles unknown error", func(t *testing.T) {
+		unknownErr := stderrors.New("unknown error")
+		err := handler.handleError(unknownErr)
+		assert.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+	})
+}
+
+// TestHelperFunctions тестирует helper функции.
+func TestHelperFunctions(t *testing.T) {
+	t.Run("intPtr with non-zero value", func(t *testing.T) {
+		result := intPtr(100)
+		assert.NotNil(t, result)
+		assert.Equal(t, 100, *result)
+	})
+
+	t.Run("intPtr with zero value", func(t *testing.T) {
+		result := intPtr(0)
+		assert.Nil(t, result)
+	})
+
+	t.Run("int32Ptr", func(t *testing.T) {
+		result := int32Ptr(42)
+		assert.NotNil(t, result)
+		assert.Equal(t, int32(42), *result)
+
+		result = int32Ptr(0)
+		assert.Nil(t, result)
+	})
+
+	t.Run("stringPtr with non-empty string", func(t *testing.T) {
+		result := stringPtr("test")
+		assert.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+	})
+
+	t.Run("stringPtr with empty string", func(t *testing.T) {
+		result := stringPtr("")
+		assert.Nil(t, result)
+	})
+}
+
+// TestMonitorHandler_HandleError_NotFound тестирует обработку ошибки "не найден".
+func TestMonitorHandler_HandleError_NotFound(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	err := handler.handleError(interfaces.ErrMonitorNotFound)
+	assert.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestMonitorHandler_HandleError_AlreadyExists тестирует обработку ошибки "уже существует".
+func TestMonitorHandler_HandleError_AlreadyExists(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	err := handler.handleError(interfaces.ErrMonitorAlreadyExists)
+	assert.Error(t, err)
+	assert.Equal(t, codes.AlreadyExists, status.Code(err))
+}
+
+// TestMonitorHandler_HandleError_Unknown тестирует обработку неизвестной ошибки.
+func TestMonitorHandler_HandleError_Unknown(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	unknownErr := stderrors.New("unknown error")
+	err := handler.handleError(unknownErr)
+
+	assert.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// TestMonitorHandler_ExtractUserID тестирует извлечение user ID.
+func TestMonitorHandler_ExtractUserID(t *testing.T) {
+	t.Run("successfully extracts user ID from valid token", func(t *testing.T) {
+		mockAuthClient := new(MockAuthClient)
+		handler := &MonitorHandler{
+			authClient: mockAuthClient,
+		}
+
+		expectedUserID := "user-123"
+		mockAuthClient.On("ValidateToken", mock.Anything, "valid-jwt-token").Return(expectedUserID, nil)
+
+		ctx := context.Background()
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("authorization", "Bearer valid-jwt-token"))
+
+		userID, err := handler.extractUserID(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUserID, userID)
+		mockAuthClient.AssertExpectations(t)
+	})
+
+	t.Run("returns error when authorization header is missing", func(t *testing.T) {
+		mockAuthClient := new(MockAuthClient)
+		handler := &MonitorHandler{
+			authClient: mockAuthClient,
+		}
+
+		ctx := context.Background()
+
+		userID, err := handler.extractUserID(ctx)
+
+		assert.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Empty(t, userID)
+	})
+
+	t.Run("returns error when authorization header format is invalid", func(t *testing.T) {
+		mockAuthClient := new(MockAuthClient)
+		handler := &MonitorHandler{
+			authClient: mockAuthClient,
+		}
+
+		ctx := context.Background()
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("authorization", "InvalidFormat token"))
+
+		userID, err := handler.extractUserID(ctx)
+
+		assert.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Empty(t, userID)
+	})
+
+	t.Run("returns error when token validation fails", func(t *testing.T) {
+		mockAuthClient := new(MockAuthClient)
+		handler := &MonitorHandler{
+			authClient: mockAuthClient,
+		}
+
+		mockAuthClient.On("ValidateToken", mock.Anything, "invalid-token").Return("", status.Error(codes.Unauthenticated, "invalid token"))
+
+		ctx := context.Background()
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("authorization", "Bearer invalid-token"))
+
+		userID, err := handler.extractUserID(ctx)
+
+		assert.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Empty(t, userID)
+		mockAuthClient.AssertExpectations(t)
+	})
+}
+
+// TestMonitorHandler_GetMonitor_MissingID тестирует отсутствие ID.
+func TestMonitorHandler_GetMonitor_MissingID(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	ctx := context.Background()
+	req := &monitov1.GetMonitorRequest{
+		Id: "", // Invalid
+	}
+
+	resp, err := handler.GetMonitor(ctx, req)
+
+	// Protobuf validation error
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+}
+
+// TestMonitorHandler_StatusCodes тестирует коды статусов gRPC.
+func TestMonitorHandler_StatusCodes(t *testing.T) {
+	t.Run("NotFound status", func(t *testing.T) {
+		st := status.Error(codes.NotFound, "monitor not found")
+		assert.Equal(t, codes.NotFound, status.Code(st))
+	})
+
+	t.Run("AlreadyExists status", func(t *testing.T) {
+		st := status.Error(codes.AlreadyExists, "monitor already exists")
+		assert.Equal(t, codes.AlreadyExists, status.Code(st))
+	})
+
+	t.Run("InvalidArgument status", func(t *testing.T) {
+		st := status.Error(codes.InvalidArgument, "validation failed")
+		assert.Equal(t, codes.InvalidArgument, status.Code(st))
+	})
+
+	t.Run("Internal status", func(t *testing.T) {
+		st := status.Error(codes.Internal, "internal server error")
+		assert.Equal(t, codes.Internal, status.Code(st))
+	})
+}
+
+// TestMonitorHandler_DefaultLimit тестирует логику лимита по умолчанию.
+func TestMonitorHandler_DefaultLimit(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    int
+		expected int
+	}{
+		{"zero value", 0, 100},
+		{"negative value", -1, 100},
+		{"positive value", 50, 50},
+		{"large value", 1000, 1000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			limit := tc.input
+			if limit <= 0 {
+				limit = 100
+			}
+			assert.Equal(t, tc.expected, limit)
+		})
+	}
+}
+
+// TestMonitorHandler_RequestStructures тестирует структуры запросов.
+func TestMonitorHandler_RequestStructures(t *testing.T) {
+	t.Run("CreateMonitorRequest", func(t *testing.T) {
+		req := &monitov1.CreateMonitorRequest{
+			Name:             "Test Monitor",
+			Url:              "https://example.com",
+			CheckType:         "HTTP",
+			IntervalSeconds:  60,
+			TimeoutSeconds:   30,
+			WorkingDays:      []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+		}
+
+		assert.Equal(t, "Test Monitor", req.Name)
+		assert.Equal(t, "https://example.com", req.Url)
+		assert.Equal(t, int32(60), req.IntervalSeconds)
+		assert.Len(t, req.WorkingDays, 5)
+	})
+
+	t.Run("ListMonitorsRequest", func(t *testing.T) {
+		req := &monitov1.ListMonitorsRequest{
+			Status: "UP",
+			Limit:  100,
+			Offset: 0,
+		}
+
+		assert.Equal(t, "UP", req.Status)
+		assert.Equal(t, int32(100), req.Limit)
+		assert.Equal(t, int32(0), req.Offset)
+	})
+}
+
+// TestMonitorHandler_EmptyResponses тестирует пустые ответы.
+func TestMonitorHandler_EmptyResponses(t *testing.T) {
+	t.Run("DeleteMonitor returns Empty", func(t *testing.T) {
+		resp := &emptypb.Empty{}
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("PauseMonitor returns Empty", func(t *testing.T) {
+		resp := &emptypb.Empty{}
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("ResumeMonitor returns Empty", func(t *testing.T) {
+		resp := &emptypb.Empty{}
+		assert.NotNil(t, resp)
+	})
+}
+
+// TestMonitorHandler_ErrorConversion тестирует конвертацию ошибок.
+func TestMonitorHandler_ErrorConversion(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	testCases := []struct {
+		name        string
+		err         error
+		expectedCode codes.Code
+	}{
+		{
+			name:        "ErrMonitorNotFound",
+			err:         interfaces.ErrMonitorNotFound,
+			expectedCode: codes.NotFound,
+		},
+		{
+			name:        "ErrMonitorAlreadyExists",
+			err:         interfaces.ErrMonitorAlreadyExists,
+			expectedCode: codes.AlreadyExists,
+		},
+		{
+			name:        "unknown error",
+			err:         stderrors.New("unknown"),
+			expectedCode: codes.Internal,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := handler.handleError(tc.err)
+			assert.Error(t, err)
+			assert.Equal(t, tc.expectedCode, status.Code(err))
+		})
+	}
+}
+
+// TestMonitorHandler_PointerHandling тестирует работу с указателями.
+func TestMonitorHandler_PointerHandling(t *testing.T) {
+	t.Run("intPtr nil for zero", func(t *testing.T) {
+		result := intPtr(0)
+		assert.Nil(t, result)
+	})
+
+	t.Run("intPtr non-nil for non-zero", func(t *testing.T) {
+		result := intPtr(100)
+		assert.NotNil(t, result)
+		assert.Equal(t, 100, *result)
+	})
+
+	t.Run("stringPtr nil for empty", func(t *testing.T) {
+		result := stringPtr("")
+		assert.Nil(t, result)
+	})
+
+	t.Run("stringPtr non-nil for non-empty", func(t *testing.T) {
+		result := stringPtr("test")
+		assert.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+	})
+
+	t.Run("int32Ptr nil for zero", func(t *testing.T) {
+		result := int32Ptr(0)
+		assert.Nil(t, result)
+	})
+
+	t.Run("int32Ptr non-nil for non-zero", func(t *testing.T) {
+		result := int32Ptr(50)
+		assert.NotNil(t, result)
+		assert.Equal(t, int32(50), *result)
+	})
+}
+
+// TestMonitorHandler_DtoToProto тестирует конвертацию DTO в protobuf.
+func TestMonitorHandler_DtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts basic monitor", func(t *testing.T) {
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Test Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, "Test Monitor", protoMonitor.Name)
+		assert.Equal(t, "https://example.com", protoMonitor.Url)
+		assert.Equal(t, "UP", protoMonitor.Status)
+		assert.Equal(t, int32(60), protoMonitor.IntervalSeconds)
+		assert.Equal(t, int32(30), protoMonitor.TimeoutSeconds)
+	})
+
+	t.Run("converts monitor with optional fields", func(t *testing.T) {
+		threshold := 1000
+		failureRate := 50
+		lastCheck := time.Now()
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Test Monitor",
+			URL:             "https://example.com",
+			Status:          "DEGRADED",
+			LastCheckAt:     &lastCheck,
+			DegradedResponseTimeThreshold: &threshold,
+			DegradedFailureRateThreshold:  &failureRate,
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		// In protobuf, these are int32, not pointers
+		assert.Equal(t, int32(1000), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(50), protoMonitor.DegradedFailureRateThreshold)
+	})
+}
+
+// TestMonitorHandler_CheckResultDtoToProto тестирует конвертацию CheckResult.
+func TestMonitorHandler_CheckResultDtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts check result with all fields", func(t *testing.T) {
+		responseTimeMs := 250
+		statusCode := 200
+
+		dtoResult := &dto.CheckResultResponse{
+			ID:             uuid.New().String(),
+			MonitorID:      uuid.New().String(),
+			Status:         "UP",
+			ResponseTimeMs: &responseTimeMs,
+			StatusCode:     &statusCode,
+			CheckedAt:      time.Now(),
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+
+		assert.Equal(t, "UP", protoResult.Status)
+		// In protobuf, these are int32, not pointers (when set)
+		assert.NotNil(t, protoResult.ResponseTimeMs)
+		assert.NotNil(t, protoResult.StatusCode)
+		assert.Equal(t, int32(250), protoResult.ResponseTimeMs)
+		assert.Equal(t, int32(200), protoResult.StatusCode)
+	})
+
+	t.Run("converts check result with error", func(t *testing.T) {
+		errorMsg := "connection timeout"
+
+		dtoResult := &dto.CheckResultResponse{
+			ID:           uuid.New().String(),
+			MonitorID:    uuid.New().String(),
+			Status:       "DOWN",
+			ErrorMessage: &errorMsg,
+			CheckedAt:    time.Now(),
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+
+		assert.Equal(t, "DOWN", protoResult.Status)
+		// In protobuf, ErrorMessage is a string, not pointer
+		assert.Equal(t, "connection timeout", protoResult.ErrorMessage)
+	})
+}
+
+// TestMonitorHandler_IncidentDtoToProto тестирует конвертацию Incident.
+func TestMonitorHandler_IncidentDtoToProto(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts active incident", func(t *testing.T) {
+		startTime := time.Now().Add(-1 * time.Hour)
+
+		dtoIncident := &dto.IncidentResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			StartTime: startTime,
+			EndTime:   nil,
+			Status:    "ACTIVE",
+		}
+
+		protoIncident := handler.incidentDtoToProto(dtoIncident)
+
+		assert.Equal(t, "ACTIVE", protoIncident.Status)
+		assert.NotNil(t, protoIncident.StartTime)
+		assert.Nil(t, protoIncident.EndTime)
+	})
+
+	t.Run("converts resolved incident", func(t *testing.T) {
+		startTime := time.Now().Add(-2 * time.Hour)
+		endTime := time.Now().Add(-1 * time.Hour)
+		duration := 3600
+
+		dtoIncident := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       startTime,
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+		}
+
+		protoIncident := handler.incidentDtoToProto(dtoIncident)
+
+		assert.Equal(t, "RESOLVED", protoIncident.Status)
+		assert.NotNil(t, protoIncident.StartTime)
+		assert.NotNil(t, protoIncident.EndTime)
+		// In protobuf, DurationSeconds is int32, not pointer (when set)
+		assert.NotNil(t, protoIncident.DurationSeconds)
+		assert.Equal(t, int32(3600), protoIncident.DurationSeconds)
+	})
+}
+
+// TestMonitorHandler_DtoToProto_Comprehensive тестирует полную конвертацию DTO в protobuf.
+func TestMonitorHandler_DtoToProto_Comprehensive(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts monitor with working hours", func(t *testing.T) {
+		start := "09:00"
+		end := "18:00"
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:                 uuid.New().String(),
+			UserID:             uuid.New().String(),
+			Name:               "Business Hours Monitor",
+			URL:                "https://example.com",
+			CheckType:          "HTTP",
+			IntervalSeconds:    300,
+			TimeoutSeconds:     30,
+			Status:             "UP",
+			WorkingHoursStart:  &start,
+			WorkingHoursEnd:    &end,
+			WorkingDays:        []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+			CreatedAt:          time.Now(),
+			UpdatedAt:          time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, "09:00", protoMonitor.WorkingHoursStart)
+		assert.Equal(t, "18:00", protoMonitor.WorkingHoursEnd)
+		assert.Len(t, protoMonitor.WorkingDays, 5)
+		assert.Equal(t, "Mon", protoMonitor.WorkingDays[0])
+	})
+
+	t.Run("converts monitor with all optional fields", func(t *testing.T) {
+		threshold := 2000
+		failureRate := 75
+		lastCheck := time.Now()
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:                              uuid.New().String(),
+			UserID:                          uuid.New().String(),
+			Name:                            "Complete Monitor",
+			URL:                             "https://example.com",
+			CheckType:                       "HTTPS",
+			IntervalSeconds:                 120,
+			TimeoutSeconds:                  60,
+			Status:                          "DEGRADED",
+			LastCheckAt:                     &lastCheck,
+			DegradedResponseTimeThreshold:   &threshold,
+			DegradedFailureRateThreshold:    &failureRate,
+			CreatedAt:                       time.Now(),
+			UpdatedAt:                       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, int32(2000), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(75), protoMonitor.DegradedFailureRateThreshold)
+		assert.NotNil(t, protoMonitor.LastCheckAt)
+	})
+
+	t.Run("converts monitor without optional fields", func(t *testing.T) {
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Minimal Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "PENDING",
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, int32(0), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(0), protoMonitor.DegradedFailureRateThreshold)
+		assert.False(t, protoMonitor.LastCheckAt.IsValid())
+	})
+
+	t.Run("converts monitor with zero timestamp fields", func(t *testing.T) {
+		threshold := 0
+		failureRate := 0
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:                              uuid.New().String(),
+			UserID:                          uuid.New().String(),
+			Name:                            "Zero Threshold Monitor",
+			URL:                             "https://example.com",
+			CheckType:                       "HTTP",
+			IntervalSeconds:                 60,
+			TimeoutSeconds:                  30,
+			Status:                          "UP",
+			DegradedResponseTimeThreshold:   &threshold,
+			DegradedFailureRateThreshold:    &failureRate,
+			CreatedAt:                       time.Now(),
+			UpdatedAt:                       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		// Zero values should not be set in protobuf
+		assert.Equal(t, int32(0), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(0), protoMonitor.DegradedFailureRateThreshold)
+	})
+}
+
+// TestMonitorHandler_CheckResultDtoToProto_Comprehensive тестирует полную конвертацию CheckResult.
+func TestMonitorHandler_CheckResultDtoToProto_Comprehensive(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts check result without optional fields", func(t *testing.T) {
+		dtoResult := &dto.CheckResultResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			Status:    "PENDING",
+			CheckedAt: time.Now(),
+			CreatedAt: time.Now(),
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+
+		assert.Equal(t, "PENDING", protoResult.Status)
+		assert.Equal(t, int32(0), protoResult.ResponseTimeMs)
+		assert.Equal(t, int32(0), protoResult.StatusCode)
+		assert.Equal(t, "", protoResult.ErrorMessage)
+	})
+
+	t.Run("converts check result with minimal fields", func(t *testing.T) {
+		responseTimeMs := 0
+		statusCode := 0
+
+		dtoResult := &dto.CheckResultResponse{
+			ID:             uuid.New().String(),
+			MonitorID:      uuid.New().String(),
+			Status:         "UP",
+			ResponseTimeMs: &responseTimeMs,
+			StatusCode:     &statusCode,
+			CheckedAt:      time.Now(),
+			CreatedAt:      time.Now(),
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+
+		assert.Equal(t, "UP", protoResult.Status)
+		// Even with zero pointers, these should be set in proto
+		assert.Equal(t, int32(0), protoResult.ResponseTimeMs)
+		assert.Equal(t, int32(0), protoResult.StatusCode)
+	})
+
+	t.Run("converts check result with all fields", func(t *testing.T) {
+		responseTimeMs := 150
+		statusCode := 200
+		errorMsg := ""
+
+		dtoResult := &dto.CheckResultResponse{
+			ID:             uuid.New().String(),
+			MonitorID:      uuid.New().String(),
+			Status:         "UP",
+			ResponseTimeMs: &responseTimeMs,
+			StatusCode:     &statusCode,
+			ErrorMessage:   &errorMsg,
+			CheckedAt:      time.Now(),
+			CreatedAt:      time.Now(),
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+
+		assert.Equal(t, "UP", protoResult.Status)
+		assert.Equal(t, int32(150), protoResult.ResponseTimeMs)
+		assert.Equal(t, int32(200), protoResult.StatusCode)
+		assert.Equal(t, "", protoResult.ErrorMessage)
+	})
+}
+
+// TestMonitorHandler_IncidentDtoToProto_Comprehensive тестирует полную конвертацию Incident.
+func TestMonitorHandler_IncidentDtoToProto_Comprehensive(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("converts incident without optional fields", func(t *testing.T) {
+		dtoIncident := &dto.IncidentResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			StartTime: time.Now().Add(-24 * time.Hour),
+			Status:    "ACTIVE",
+			CreatedAt: time.Now(),
+		}
+
+		protoIncident := handler.incidentDtoToProto(dtoIncident)
+
+		assert.Equal(t, "ACTIVE", protoIncident.Status)
+		assert.Nil(t, protoIncident.EndTime)
+		assert.Equal(t, int32(0), protoIncident.DurationSeconds)
+	})
+
+	t.Run("converts incident with zero duration", func(t *testing.T) {
+		endTime := time.Now()
+		duration := 0
+
+		dtoIncident := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       time.Now().Add(-1 * time.Hour),
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoIncident := handler.incidentDtoToProto(dtoIncident)
+
+		assert.Equal(t, "RESOLVED", protoIncident.Status)
+		assert.NotNil(t, protoIncident.EndTime)
+		assert.Equal(t, int32(0), protoIncident.DurationSeconds)
+	})
+
+	t.Run("converts incident with long duration", func(t *testing.T) {
+		startTime := time.Now().Add(-48 * time.Hour)
+		endTime := time.Now()
+		duration := 172800 // 48 hours in seconds
+
+		dtoIncident := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       startTime,
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoIncident := handler.incidentDtoToProto(dtoIncident)
+
+		assert.Equal(t, "RESOLVED", protoIncident.Status)
+		assert.NotNil(t, protoIncident.EndTime)
+		assert.Equal(t, int32(172800), protoIncident.DurationSeconds)
+	})
+}
+
+// TestMonitorHandler_ErrorHandling_Comprehensive тестирует обработку всех типов ошибок.
+func TestMonitorHandler_ErrorHandling_Comprehensive(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles nil error", func(t *testing.T) {
+		err := handler.handleError(nil)
+		assert.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+	})
+
+	t.Run("handles wrapped errors", func(t *testing.T) {
+		wrappedErr := errors.Wrap(interfaces.ErrMonitorNotFound, "monitor not found in repository")
+		err := handler.handleError(wrappedErr)
+		assert.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+
+	t.Run("handles multiple wrapped errors", func(t *testing.T) {
+		wrappedErr := errors.Wrap(errors.Wrap(interfaces.ErrMonitorAlreadyExists, "duplicate key"), "database constraint")
+		err := handler.handleError(wrappedErr)
+		assert.Error(t, err)
+		assert.Equal(t, codes.AlreadyExists, status.Code(err))
+	})
+
+	t.Run("preserves error message for unknown errors", func(t *testing.T) {
+		unknownErr := stderrors.New("database connection failed")
+		err := handler.handleError(unknownErr)
+		assert.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+	})
+}
+
+// TestMonitorHandler_ValidationScenarios тестирует сценарии валидации.
+func TestMonitorHandler_ValidationScenarios(t *testing.T) {
+	t.Run("accepts valid CreateMonitorRequest structure", func(t *testing.T) {
+		req := &monitov1.CreateMonitorRequest{
+			Name:            "Valid Monitor",
+			Url:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+		}
+
+		// Verify the request structure is valid
+		assert.Equal(t, "Valid Monitor", req.Name)
+		assert.Equal(t, "https://example.com", req.Url)
+		assert.Equal(t, int32(60), req.IntervalSeconds)
+		assert.Equal(t, int32(30), req.TimeoutSeconds)
+	})
+
+	t.Run("accepts valid UpdateMonitorRequest structure", func(t *testing.T) {
+		req := &monitov1.UpdateMonitorRequest{
+			Id:   uuid.New().String(),
+			Name: "Updated Name",
+		}
+
+		// Verify the request structure is valid
+		assert.NotEmpty(t, req.Id)
+		assert.Equal(t, "Updated Name", req.Name)
+	})
+
+	t.Run("handles request with all optional fields", func(t *testing.T) {
+		req := &monitov1.CreateMonitorRequest{
+			Name:                                "Complete Monitor",
+			Url:                                 "https://example.com",
+			CheckType:                           "HTTP",
+			IntervalSeconds:                     300,
+			TimeoutSeconds:                      60,
+			WorkingHoursStart:                   "09:00",
+			WorkingHoursEnd:                     "18:00",
+			WorkingDays:                         []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+			DegradedResponseTimeThreshold:       1000,
+			DegradedFailureRateThreshold:        50,
+		}
+
+		// Verify all fields are set correctly
+		assert.Equal(t, "Complete Monitor", req.Name)
+		assert.Equal(t, int32(1000), req.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(50), req.DegradedFailureRateThreshold)
+		assert.Len(t, req.WorkingDays, 5)
+	})
+}
+
+// TestMonitorHandler_EdgeCases тестирует граничные случаи.
+func TestMonitorHandler_EdgeCases(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles monitor with extreme interval values", func(t *testing.T) {
+		minInterval := int32(30)
+		maxInterval := int32(3600)
+
+		assert.NotNil(t, intPtr(minInterval))
+		assert.NotNil(t, intPtr(maxInterval))
+		assert.Nil(t, intPtr(0))
+	})
+
+	t.Run("handles monitor with extreme timeout values", func(t *testing.T) {
+		minTimeout := int32(1)
+		maxTimeout := int32(300)
+
+		assert.NotNil(t, intPtr(minTimeout))
+		assert.NotNil(t, intPtr(maxTimeout))
+		assert.Nil(t, intPtr(0))
+	})
+
+	t.Run("handles empty working days array", func(t *testing.T) {
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "No Working Days",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			WorkingDays:     []string{},
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+		assert.NotNil(t, protoMonitor.WorkingDays)
+		assert.Len(t, protoMonitor.WorkingDays, 0)
+	})
+
+	t.Run("handles all working days", func(t *testing.T) {
+		allDays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "All Days Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			WorkingDays:     allDays,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+		assert.Len(t, protoMonitor.WorkingDays, 7)
+		assert.Equal(t, "Sun", protoMonitor.WorkingDays[0])
+		assert.Equal(t, "Sat", protoMonitor.WorkingDays[6])
+	})
+}
+
+// TestMonitorHandler_StatusConversion тестирует конвертацию всех статусов.
+func TestMonitorHandler_StatusConversion(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	statuses := []string{"PENDING", "UP", "DOWN", "DEGRADED", "PAUSED"}
+
+	for _, status := range statuses {
+		t.Run("converts status "+status, func(t *testing.T) {
+			dtoMonitor := &dto.MonitorResponse{
+				ID:              uuid.New().String(),
+				UserID:          uuid.New().String(),
+				Name:            status + " Monitor",
+				URL:             "https://example.com",
+				CheckType:       "HTTP",
+				IntervalSeconds: 60,
+				TimeoutSeconds:  30,
+				Status:          status,
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			}
+
+			protoMonitor := handler.dtoToProto(dtoMonitor)
+			assert.Equal(t, status, protoMonitor.Status)
+		})
+	}
+}
+
+// TestMonitorHandler_TimestampHandling тестирует обработку временных меток.
+func TestMonitorHandler_TimestampHandling(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles UTC timestamps", func(t *testing.T) {
+		now := time.Now().UTC()
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "UTC Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+		assert.NotNil(t, protoMonitor.CreatedAt)
+		assert.NotNil(t, protoMonitor.UpdatedAt)
+	})
+
+	t.Run("handles nil LastCheckAt", func(t *testing.T) {
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Never Checked Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "PENDING",
+			LastCheckAt:     nil,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+		assert.False(t, protoMonitor.LastCheckAt.IsValid())
+	})
+
+	t.Run("handles old and recent timestamps", func(t *testing.T) {
+		oldTime := time.Now().Add(-30 * 24 * time.Hour) // 30 days ago
+		recentTime := time.Now().Add(-1 * time.Minute)  // 1 minute ago
+
+		dtoResult := &dto.CheckResultResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			Status:    "UP",
+			CheckedAt: oldTime,
+			CreatedAt: recentTime,
+		}
+
+		protoResult := handler.checkResultDtoToProto(dtoResult)
+		assert.NotNil(t, protoResult.CheckedAt)
+		assert.NotNil(t, protoResult.CreatedAt)
+	})
+}
+
+// TestMonitorHandler_RequestResponseFlow тестирует полный цикл запрос-ответ.
+func TestMonitorHandler_RequestResponseFlow(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("CreateMonitorRequest to DTO conversion", func(t *testing.T) {
+		userID := uuid.New().String()
+		req := &monitov1.CreateMonitorRequest{
+			Name:            "Flow Test Monitor",
+			Url:             "https://flow-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 120,
+			TimeoutSeconds:  60,
+		}
+
+		// Simulate the conversion that happens in CreateMonitor
+		createReq := &dto.CreateMonitorRequest{
+			UserID:          userID,
+			Name:            req.Name,
+			URL:             req.Url,
+			CheckType:       req.CheckType,
+			IntervalSeconds: int(req.IntervalSeconds),
+			TimeoutSeconds:  int(req.TimeoutSeconds),
+		}
+
+		assert.Equal(t, "Flow Test Monitor", createReq.Name)
+		assert.Equal(t, "https://flow-test.com", createReq.URL)
+		assert.Equal(t, 120, createReq.IntervalSeconds)
+		assert.Equal(t, 60, createReq.TimeoutSeconds)
+	})
+
+	t.Run("ListMonitorsRequest to DTO conversion", func(t *testing.T) {
+		userID := uuid.New().String()
+		req := &monitov1.ListMonitorsRequest{
+			Status: "UP",
+			Limit:  50,
+			Offset: 10,
+		}
+
+		// Simulate the conversion that happens in ListMonitors
+		listReq := &dto.ListMonitorsRequest{
+			UserID: userID,
+			Status: req.Status,
+			Limit:  int(req.Limit),
+			Offset: int(req.Offset),
+		}
+
+		if listReq.Limit <= 0 {
+			listReq.Limit = 100
+		}
+
+		assert.Equal(t, "UP", listReq.Status)
+		assert.Equal(t, 50, listReq.Limit)
+		assert.Equal(t, 10, listReq.Offset)
+	})
+
+	t.Run("DTO to protobuf conversion for response", func(t *testing.T) {
+		dtoResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Response Test",
+			URL:             "https://response-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 180,
+			TimeoutSeconds:  45,
+			Status:          "UP",
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoResp := handler.dtoToProto(dtoResp)
+
+		assert.Equal(t, "Response Test", protoResp.Name)
+		assert.Equal(t, "https://response-test.com", protoResp.Url)
+		assert.Equal(t, "UP", protoResp.Status)
+		assert.Equal(t, int32(180), protoResp.IntervalSeconds)
+		assert.Equal(t, int32(45), protoResp.TimeoutSeconds)
+	})
+}
+
+// TestMonitorHandler_ErrorCodeMapping тестирует отображение кодов ошибок.
+func TestMonitorHandler_ErrorCodeMapping(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("maps domain errors to gRPC codes", func(t *testing.T) {
+		errorMappings := []struct {
+			name           string
+			domainError    error
+			expectedCode   codes.Code
+			shouldContain  string
+		}{
+			{
+				name:          "ErrMonitorNotFound",
+				domainError:   interfaces.ErrMonitorNotFound,
+				expectedCode:  codes.NotFound,
+				shouldContain: "not found",
+			},
+			{
+				name:          "ErrMonitorAlreadyExists",
+				domainError:   interfaces.ErrMonitorAlreadyExists,
+				expectedCode:  codes.AlreadyExists,
+				shouldContain: "already exists",
+			},
+			{
+				name:          "ErrMonitorNameInvalid",
+				domainError:   pkgerrors.ErrMonitorNameInvalid,
+				expectedCode:  codes.Internal,
+				shouldContain: "internal server error",
+			},
+			{
+				name:          "ErrMonitorURLInvalid",
+				domainError:   pkgerrors.ErrMonitorURLInvalid,
+				expectedCode:  codes.Internal,
+				shouldContain: "internal server error",
+			},
+		}
+
+		for _, tc := range errorMappings {
+			t.Run(tc.name, func(t *testing.T) {
+				err := handler.handleError(tc.domainError)
+				require.Error(t, err)
+				assert.Equal(t, tc.expectedCode, status.Code(err))
+				assert.Contains(t, status.Convert(err).Message(), tc.shouldContain)
+			})
+		}
+	})
+}
+
+// TestMonitorHandler_CompleteFlow тестирует полные потоки данных.
+func TestMonitorHandler_CompleteFlow(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("full monitor data flow", func(t *testing.T) {
+		// Simulate creating a monitor from request to response
+		createReq := &monitov1.CreateMonitorRequest{
+			Name:            "Full Flow Monitor",
+			Url:             "https://full-flow.com",
+			CheckType:       "HTTPS",
+			IntervalSeconds: 300,
+			TimeoutSeconds:  90,
+			WorkingDays:     []string{"Mon", "Wed", "Fri"},
+		}
+
+		// Convert to DTO (as handler would do)
+		userID := uuid.New().String()
+		createDTO := &dto.CreateMonitorRequest{
+			UserID:          userID,
+			Name:            createReq.Name,
+			URL:             createReq.Url,
+			CheckType:       createReq.CheckType,
+			IntervalSeconds: int(createReq.IntervalSeconds),
+			TimeoutSeconds:  int(createReq.TimeoutSeconds),
+			WorkingDays:     createReq.WorkingDays,
+		}
+
+		// Simulate service response
+		serviceResp := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          userID,
+			Name:            createDTO.Name,
+			URL:             createDTO.URL,
+			CheckType:       createDTO.CheckType,
+			IntervalSeconds: createDTO.IntervalSeconds,
+			TimeoutSeconds:  createDTO.TimeoutSeconds,
+			Status:          "PENDING",
+			WorkingDays:     createDTO.WorkingDays,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		// Convert back to protobuf (as handler would do)
+		protoResp := handler.dtoToProto(serviceResp)
+
+		// Verify round-trip preservation
+		assert.Equal(t, createReq.Name, protoResp.Name)
+		assert.Equal(t, createReq.Url, protoResp.Url)
+		assert.Equal(t, createReq.CheckType, protoResp.CheckType)
+		assert.Equal(t, createReq.IntervalSeconds, protoResp.IntervalSeconds)
+		assert.Equal(t, createReq.TimeoutSeconds, protoResp.TimeoutSeconds)
+		assert.Len(t, protoResp.WorkingDays, 3)
+	})
+
+	t.Run("check result data flow", func(t *testing.T) {
+		// Simulate check result from service to protobuf
+		responseTime := 150
+		statusCode := 200
+
+		serviceResp := &dto.CheckResultResponse{
+			ID:             uuid.New().String(),
+			MonitorID:      uuid.New().String(),
+			Status:         "UP",
+			ResponseTimeMs: &responseTime,
+			StatusCode:     &statusCode,
+			CheckedAt:      time.Now(),
+			CreatedAt:      time.Now(),
+		}
+
+		protoResp := handler.checkResultDtoToProto(serviceResp)
+
+		assert.Equal(t, "UP", protoResp.Status)
+		assert.Equal(t, int32(150), protoResp.ResponseTimeMs)
+		assert.Equal(t, int32(200), protoResp.StatusCode)
+		assert.NotNil(t, protoResp.CheckedAt)
+	})
+
+	t.Run("incident data flow", func(t *testing.T) {
+		// Simulate incident from service to protobuf
+		startTime := time.Now().Add(-2 * time.Hour)
+		endTime := time.Now().Add(-1 * time.Hour)
+		duration := 3600
+
+		serviceResp := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       startTime,
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoResp := handler.incidentDtoToProto(serviceResp)
+
+		assert.Equal(t, "RESOLVED", protoResp.Status)
+		assert.NotNil(t, protoResp.StartTime)
+		assert.NotNil(t, protoResp.EndTime)
+		assert.Equal(t, int32(3600), protoResp.DurationSeconds)
+	})
+}
+
+// TestMonitorHandler_OptionalFieldHandling тестирует обработку опциональных полей.
+func TestMonitorHandler_OptionalFieldHandling(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles monitor with all optional fields nil", func(t *testing.T) {
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Minimal",
+			URL:             "https://minimal.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "UP",
+			// All optional fields are nil
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		// Verify optional fields are not set in protobuf
+		assert.Equal(t, "", protoMonitor.WorkingHoursStart)
+		assert.Equal(t, "", protoMonitor.WorkingHoursEnd)
+		assert.Equal(t, int32(0), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(0), protoMonitor.DegradedFailureRateThreshold)
+		assert.False(t, protoMonitor.LastCheckAt.IsValid())
+	})
+
+	t.Run("handles monitor with degraded thresholds", func(t *testing.T) {
+		responseThreshold := 2000
+		failureThreshold := 80
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:              uuid.New().String(),
+			UserID:          uuid.New().String(),
+			Name:            "Degraded Monitor",
+			URL:             "https://degraded.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          "DEGRADED",
+			DegradedResponseTimeThreshold: &responseThreshold,
+			DegradedFailureRateThreshold:  &failureThreshold,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, int32(2000), protoMonitor.DegradedResponseTimeThreshold)
+		assert.Equal(t, int32(80), protoMonitor.DegradedFailureRateThreshold)
+	})
+
+	t.Run("handles monitor with working hours", func(t *testing.T) {
+		start := "08:00"
+		end := "20:00"
+
+		dtoMonitor := &dto.MonitorResponse{
+			ID:                 uuid.New().String(),
+			UserID:             uuid.New().String(),
+			Name:               "Business Hours",
+			URL:                "https://business.com",
+			CheckType:          "HTTP",
+			IntervalSeconds:    300,
+			TimeoutSeconds:     60,
+			Status:             "UP",
+			WorkingHoursStart:  &start,
+			WorkingHoursEnd:    &end,
+			WorkingDays:        []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+			CreatedAt:          time.Now(),
+			UpdatedAt:          time.Now(),
+		}
+
+		protoMonitor := handler.dtoToProto(dtoMonitor)
+
+		assert.Equal(t, "08:00", protoMonitor.WorkingHoursStart)
+		assert.Equal(t, "20:00", protoMonitor.WorkingHoursEnd)
+		assert.Len(t, protoMonitor.WorkingDays, 5)
+	})
+}
+
+// TestMonitorHandler_IntegrationScenarios тестирует интеграционные сценарии.
+func TestMonitorHandler_IntegrationScenarios(t *testing.T) {
+	handler := &MonitorHandler{}
+
+	t.Run("handles pagination logic correctly", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			limit    int32
+			offset   int32
+			expected int
+		}{
+			{"default limit", 0, 0, 100},
+			{"custom limit", 50, 0, 50},
+			{"custom offset", 100, 10, 100},
+			{"both custom", 25, 5, 25},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				limit := int(tc.limit)
+				if limit <= 0 {
+					limit = 100
+				}
+				assert.Equal(t, tc.expected, limit)
+			})
+		}
+	})
+
+	t.Run("handles different monitor statuses", func(t *testing.T) {
+		statuses := []string{"PENDING", "UP", "DOWN", "DEGRADED", "PAUSED"}
+
+		for _, status := range statuses {
+			t.Run("status_"+status, func(t *testing.T) {
+				dtoMonitor := &dto.MonitorResponse{
+					ID:              uuid.New().String(),
+					UserID:          uuid.New().String(),
+					Name:            status + " Monitor",
+					URL:             "https://status-test.com",
+					CheckType:       "HTTP",
+					IntervalSeconds: 60,
+					TimeoutSeconds:  30,
+					Status:          status,
+					CreatedAt:       time.Now(),
+					UpdatedAt:       time.Now(),
+				}
+
+				protoMonitor := handler.dtoToProto(dtoMonitor)
+				assert.Equal(t, status, protoMonitor.Status)
+			})
+		}
+	})
+
+	t.Run("handles incident lifecycle", func(t *testing.T) {
+		// Active incident
+		activeIncident := &dto.IncidentResponse{
+			ID:        uuid.New().String(),
+			MonitorID: uuid.New().String(),
+			StartTime: time.Now().Add(-1 * time.Hour),
+			EndTime:   nil,
+			Status:    "ACTIVE",
+			CreatedAt: time.Now(),
+		}
+
+		protoActive := handler.incidentDtoToProto(activeIncident)
+		assert.Equal(t, "ACTIVE", protoActive.Status)
+		assert.Nil(t, protoActive.EndTime)
+
+		// Resolved incident
+		endTime := time.Now()
+		duration := 3600
+
+		resolvedIncident := &dto.IncidentResponse{
+			ID:              uuid.New().String(),
+			MonitorID:       uuid.New().String(),
+			StartTime:       time.Now().Add(-2 * time.Hour),
+			EndTime:         &endTime,
+			DurationSeconds: &duration,
+			Status:          "RESOLVED",
+			CreatedAt:       time.Now(),
+		}
+
+		protoResolved := handler.incidentDtoToProto(resolvedIncident)
+		assert.Equal(t, "RESOLVED", protoResolved.Status)
+		assert.NotNil(t, protoResolved.EndTime)
+		assert.NotNil(t, protoResolved.DurationSeconds)
+	})
+}

@@ -1,0 +1,776 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/dashboard.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "DashboardService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/dashboard": {
+      "get": {
+        "summary": "uc_03_01_05: Get dashboard with monitor statuses",
+        "operationId": "DashboardService_GetDashboard",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardGetDashboardResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "statuses",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "HEALTH_STATUS_UNSPECIFIED",
+                "HEALTH_STATUS_UP",
+                "HEALTH_STATUS_DOWN",
+                "HEALTH_STATUS_DEGRADED",
+                "HEALTH_STATUS_PAUSED"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SORT_ORDER_UNSPECIFIED",
+              "SORT_ORDER_ASC",
+              "SORT_ORDER_DESC"
+            ],
+            "default": "SORT_ORDER_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/dashboard/export": {
+      "post": {
+        "summary": "uc_03_01_17d: Export dashboard data",
+        "operationId": "DashboardService_ExportDashboard",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardExportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/dashboardExportDashboardRequest"
+            }
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/incidents/{id}": {
+      "get": {
+        "summary": "uc_03_02_07: Get incident details",
+        "operationId": "DashboardService_GetIncidentDetails",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardIncidentDetail"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/history": {
+      "get": {
+        "summary": "uc_03_02_01: Get check history for a monitor",
+        "operationId": "DashboardService_GetCheckHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardGetCheckHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "HEALTH_STATUS_UNSPECIFIED",
+              "HEALTH_STATUS_UP",
+              "HEALTH_STATUS_DOWN",
+              "HEALTH_STATUS_DEGRADED",
+              "HEALTH_STATUS_PAUSED"
+            ],
+            "default": "HEALTH_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "SORT_ORDER_UNSPECIFIED",
+              "SORT_ORDER_ASC",
+              "SORT_ORDER_DESC"
+            ],
+            "default": "SORT_ORDER_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/history/export": {
+      "post": {
+        "summary": "uc_03_02_09: Export history",
+        "operationId": "DashboardService_ExportHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardExportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DashboardServiceExportHistoryBody"
+            }
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/incidents": {
+      "get": {
+        "summary": "uc_03_02_06: Get incidents for a monitor",
+        "operationId": "DashboardService_GetIncidents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardGetIncidentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/metrics": {
+      "get": {
+        "summary": "uc_03_02_10: Get period metrics",
+        "operationId": "DashboardService_GetPeriodMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/dashboardPeriodMetrics"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "DashboardService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "DashboardServiceExportHistoryBody": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/dashboardHealthStatus"
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "format": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dashboardCheckHistoryEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/dashboardHealthStatus"
+        },
+        "status_code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "response_time_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "error_message": {
+          "type": "string"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "Check history entry"
+    },
+    "dashboardExportDashboardRequest": {
+      "type": "object",
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dashboardHealthStatus"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "dashboardExportResponse": {
+      "type": "object",
+      "properties": {
+        "download_url": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "expires_at_unix": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "dashboardGetCheckHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/dashboardCheckHistoryEntry"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "dashboardGetDashboardResponse": {
+      "type": "object",
+      "properties": {
+        "monitors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/dashboardMonitorStatusView"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "overall_uptime_percentage": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "dashboardGetIncidentsResponse": {
+      "type": "object",
+      "properties": {
+        "incidents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/dashboardIncident"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "dashboardHealthStatus": {
+      "type": "string",
+      "enum": [
+        "HEALTH_STATUS_UNSPECIFIED",
+        "HEALTH_STATUS_UP",
+        "HEALTH_STATUS_DOWN",
+        "HEALTH_STATUS_DEGRADED",
+        "HEALTH_STATUS_PAUSED"
+      ],
+      "default": "HEALTH_STATUS_UNSPECIFIED",
+      "title": "Dashboard monitor status (health check status)"
+    },
+    "dashboardIncident": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_seconds": {
+          "type": "string",
+          "format": "int64"
+        },
+        "check_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "$ref": "#/definitions/dashboardIncidentStatus"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "Incident"
+    },
+    "dashboardIncidentDetail": {
+      "type": "object",
+      "properties": {
+        "incident": {
+          "$ref": "#/definitions/dashboardIncident"
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/dashboardCheckHistoryEntry"
+          }
+        }
+      },
+      "title": "Incident detail with timeline"
+    },
+    "dashboardIncidentStatus": {
+      "type": "string",
+      "enum": [
+        "INCIDENT_STATUS_UNSPECIFIED",
+        "INCIDENT_STATUS_ACTIVE",
+        "INCIDENT_STATUS_RESOLVED"
+      ],
+      "default": "INCIDENT_STATUS_UNSPECIFIED",
+      "title": "Incident status"
+    },
+    "dashboardMonitorStatusView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/dashboardHealthStatus"
+        },
+        "uptime_percentage": {
+          "type": "number",
+          "format": "double"
+        },
+        "last_checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_response_time_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "Monitor status view for dashboard"
+    },
+    "dashboardPeriodMetrics": {
+      "type": "object",
+      "properties": {
+        "total_checks": {
+          "type": "string",
+          "format": "int64"
+        },
+        "success_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "failed_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "degraded_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "uptime_percentage": {
+          "type": "number",
+          "format": "double"
+        },
+        "p50_response_time_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95_response_time_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "p99_response_time_ms": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "title": "Period metrics"
+    },
+    "dashboardSortOrder": {
+      "type": "string",
+      "enum": [
+        "SORT_ORDER_UNSPECIFIED",
+        "SORT_ORDER_ASC",
+        "SORT_ORDER_DESC"
+      ],
+      "default": "SORT_ORDER_UNSPECIFIED",
+      "title": "Sort order"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

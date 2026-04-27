@@ -1,0 +1,41 @@
+{
+  "skill_name": "x-new-adapter",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Нужно добавить новый S3-compatible storage adapter package. Опиши порядок: место в дереве, doc.go, Config, constructor, lifecycle и тесты.",
+      "expected_output": "Агент ведёт по полному workflow adapter package: место в дереве, чтение родительского doc.go, Config, публичный контракт, constructor без I/O, lifecycle и тесты.",
+      "files": [],
+      "expectations": [
+        "Ответ требует прочитать ближайший родительский doc.go и оформить собственный doc.go",
+        "Ответ требует спроектировать Config через x-env-config или эквивалентный env-config path",
+        "Ответ выбирает или требует выбрать публичный контракт уровня storage.Storage или эквивалентный верхнеуровневый interface",
+        "Ответ фиксирует конструктор без I/O, возвращающий одно значение",
+        "Ответ требует observability для внешних операций или ссылается на x-observability",
+        "Ответ требует явный lifecycle или Close/Start semantics и покрытие тестами"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Хочу быстро накидать каркас нового adapter package перед ручной доработкой. Что использовать?",
+      "expected_output": "Агент ведёт к bundled asset templates и объясняет, как взять прозрачный стартовый каркас без генераторного script.",
+      "files": [],
+      "expectations": [
+        "Упомянут assets/adapter-package/",
+        "Ответ предлагает прозрачные шаблоны, а не генераторный script"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Можно ли смотреть в ../adapters как на эталон архитектуры нового адаптера? И отдельный вопрос: этот же скилл подходит, если я делаю service package?",
+      "expected_output": "Агент разделяет архитектурные эталоны и источник API-совместимости, а также останавливает неправильное применение x-new-adapter к service-layer package.",
+      "files": [],
+      "expectations": [
+        "Сказано, что ../adapters используется только как источник текущего API",
+        "Не предлагается копировать legacy architecture из ../adapters",
+        "Эталонная архитектура выводится из проектных инвариантов, а не из legacy-слоя ../adapters",
+        "Ответ явно говорит, что x-new-adapter не для service/repo/controller package"
+      ]
+    }
+  ]
+}

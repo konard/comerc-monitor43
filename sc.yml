@@ -1,0 +1,26 @@
+# scenarios/SC-001_login.yaml
+scenario: SC-001
+title: "Вход пользователя в систему"
+description: |
+  Пользователь может войти по валидным email и паролю, получить токен
+  аутентификации и быть перенаправленным на главную страницу.
+
+status: draft # draft | ready | in_progress | done
+
+relations:
+  depends_on: # от каких сценариев зависит
+    - SC-000_registration
+    - SC-010_password_recovery
+  related_stories:
+    - "AUTH-123" # ID user story / backlog item в Jira/YouTrack и т.п.
+  domain_objects:
+    - "User"
+    - "AuthToken"
+  external_systems:
+    - "AuthService"
+    - "EmailGateway"
+
+tags:
+  - "functional"
+  - "ui"
+  - "security"

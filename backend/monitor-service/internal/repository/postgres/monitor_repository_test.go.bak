@@ -1,0 +1,851 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"regexp"
+	"testing"
+	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/raul/monitor/backend/monitor-service/internal/model"
+)
+
+// TestMonitorRepository_Create_Success тестирует успешное создание монитора.
+func TestMonitorRepository_Create_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	monitor, err := domain.NewMonitor(userID, "Test Monitor", "https://example.com", 60)
+	require.NoError(t, err)
+
+	// Ожидаем INSERT запрос (sqlx.NamedExec конвертирует :param в $1, $2, etc.)
+	mock.ExpectExec(
+		regexp.QuoteMeta(`INSERT INTO monitors`),
+	).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = repo.Create(context.Background(), monitor)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_Create_Error тестирует ошибку при создании монитора.
+func TestMonitorRepository_Create_Error(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	monitor, err := domain.NewMonitor(userID, "Test Monitor", "https://example.com", 60)
+	require.NoError(t, err)
+
+	// Ожидаем ошибку при INSERT
+	mock.ExpectExec(
+		regexp.QuoteMeta(`INSERT INTO monitors`),
+	).WillReturnError(sql.ErrConnDone)
+
+	err = repo.Create(context.Background(), monitor)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByID_Success тестирует успешное получение монитора по ID.
+func TestMonitorRepository_GetByID_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	userID := uuid.New()
+	now := time.Now()
+
+	// Используем pq.Array для working_days
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		monitorID, userID, "Test Monitor", "https://example.com", "HTTP", 60, 30,
+		"PENDING", nil, nil, []byte("{Monday,Tuesday}"),
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE id = $1
+	`)).WithArgs(monitorID).WillReturnRows(rows)
+
+	monitor, err := repo.GetByID(context.Background(), monitorID)
+	assert.NoError(t, err)
+	assert.NotNil(t, monitor)
+	assert.Equal(t, monitorID, monitor.ID)
+	assert.Equal(t, "Test Monitor", monitor.Name)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByID_NotFound тестирует случай, когда монитор не найден.
+func TestMonitorRepository_GetByID_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE id = $1
+	`)).WithArgs(monitorID).WillReturnError(sql.ErrNoRows)
+
+	monitor, err := repo.GetByID(context.Background(), monitorID)
+	assert.Error(t, err)
+	assert.Nil(t, monitor)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListByUserID_Success тестирует получение списка мониторов пользователя.
+func TestMonitorRepository_ListByUserID_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).
+		AddRow(
+			uuid.New(), userID, "Monitor 1", "https://example1.com", "HTTP", 60, 30,
+			"PENDING", nil, nil, pqArrayString([]string{"Monday"}),
+			nil, nil, nil, now, now,
+		).
+		AddRow(
+			uuid.New(), userID, "Monitor 2", "https://example2.com", "HTTP", 60, 30,
+			"UP", nil, nil, pqArrayString([]string{"Tuesday"}),
+			nil, nil, nil, now, now,
+		)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`)).WithArgs(userID, 10, 0).WillReturnRows(rows)
+
+	monitors, err := repo.ListByUserID(context.Background(), userID, 10, 0)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 2)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListByUserID_Empty тестирует получение пустого списка мониторов.
+func TestMonitorRepository_ListByUserID_Empty(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	})
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`)).WithArgs(userID, 10, 0).WillReturnRows(rows)
+
+	monitors, err := repo.ListByUserID(context.Background(), userID, 10, 0)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 0)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_Update_Success тестирует успешное обновление монитора.
+func TestMonitorRepository_Update_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	monitor, err := domain.NewMonitor(userID, "Test", "https://example.com", 60)
+	require.NoError(t, err)
+	monitor.Name = "Updated Name"
+
+	// sqlx.NamedExec конвертирует :param в $1, $2, etc.
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE monitors SET`)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = repo.Update(context.Background(), monitor)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_Update_NotFound тестирует обновление несуществующего монитора.
+func TestMonitorRepository_Update_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	monitor, err := domain.NewMonitor(userID, "Test", "https://example.com", 60)
+	require.NoError(t, err)
+
+	// sqlx.NamedExec конвертирует :param в $1, $2, etc.
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE monitors SET`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.Update(context.Background(), monitor)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_UpdateStatus_Success тестирует успешное обновление статуса.
+func TestMonitorRepository_UpdateStatus_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE monitors SET
+			status = $1,
+			updated_at = $2
+		WHERE id = $3
+	`)).WithArgs(domain.StatusUp, sqlmock.AnyArg(), monitorID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = repo.UpdateStatus(context.Background(), monitorID, domain.StatusUp)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_UpdateStatus_NotFound тестирует обновление статуса несуществующего монитора.
+func TestMonitorRepository_UpdateStatus_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE monitors SET
+			status = $1,
+			updated_at = $2
+		WHERE id = $3
+	`)).WithArgs(domain.StatusUp, sqlmock.AnyArg(), monitorID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.UpdateStatus(context.Background(), monitorID, domain.StatusUp)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_Delete_Success тестирует успешное удаление монитора.
+func TestMonitorRepository_Delete_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM monitors WHERE id = $1`)).
+		WithArgs(monitorID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = repo.Delete(context.Background(), monitorID)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_Delete_NotFound тестирует удаление несуществующего монитора.
+func TestMonitorRepository_Delete_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM monitors WHERE id = $1`)).
+		WithArgs(monitorID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.Delete(context.Background(), monitorID)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_CountByUserID_Success тестирует подсчёт мониторов пользователя.
+func TestMonitorRepository_CountByUserID_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT COUNT(*) FROM monitors WHERE user_id = $1`)).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	count, err := repo.CountByUserID(context.Background(), userID)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ExistsByName_True тестирует проверку существования монитора (существует).
+func TestMonitorRepository_ExistsByName_True(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM monitors WHERE user_id = $1 AND name = $2)`)).
+		WithArgs(userID, "Test Monitor").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	exists, err := repo.ExistsByName(context.Background(), userID, "Test Monitor")
+	assert.NoError(t, err)
+	assert.True(t, exists)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ExistsByName_False тестирует проверку существования монитора (не существует).
+func TestMonitorRepository_ExistsByName_False(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM monitors WHERE user_id = $1 AND name = $2)`)).
+		WithArgs(userID, "Test Monitor").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	exists, err := repo.ExistsByName(context.Background(), userID, "Test Monitor")
+	assert.NoError(t, err)
+	assert.False(t, exists)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListActive_Success тестирует получение списка активных мониторов.
+func TestMonitorRepository_ListActive_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		uuid.New(), uuid.New(), "Active Monitor", "https://example.com", "HTTP", 60, 30,
+		"UP", nil, nil, pqArrayString([]string{"Monday"}),
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE status != 'PAUSED'
+		ORDER BY created_at DESC
+	`)).WillReturnRows(rows)
+
+	monitors, err := repo.ListActive(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 1)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListDueForCheck_Success тестирует получение мониторов для проверки.
+func TestMonitorRepository_ListDueForCheck_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		uuid.New(), uuid.New(), "Due Monitor", "https://example.com", "HTTP", 60, 30,
+		"UP", nil, nil, pqArrayString([]string{"Monday"}),
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE status != 'PAUSED'
+			AND (last_check_at IS NULL OR last_check_at + (interval_seconds || ' seconds')::interval < NOW())
+		ORDER BY last_check_at ASC NULLS FIRST
+		LIMIT $1
+	`)).WithArgs(10).WillReturnRows(rows)
+
+	monitors, err := repo.ListDueForCheck(context.Background(), 10)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 1)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_UpdateLastCheck_Success тестирует обновление времени последней проверки.
+func TestMonitorRepository_UpdateLastCheck_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	lastCheck := time.Now()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE monitors SET
+			last_check_at = $1,
+			updated_at = $2
+		WHERE id = $3
+	`)).WithArgs(lastCheck, sqlmock.AnyArg(), monitorID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = repo.UpdateLastCheck(context.Background(), monitorID, lastCheck)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_UpdateLastCheck_NotFound тестирует обновление времени последней проверки несуществующего монитора.
+func TestMonitorRepository_UpdateLastCheck_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	lastCheck := time.Now()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE monitors SET
+			last_check_at = $1,
+			updated_at = $2
+		WHERE id = $3
+	`)).WithArgs(lastCheck, sqlmock.AnyArg(), monitorID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.UpdateLastCheck(context.Background(), monitorID, lastCheck)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByUserIDAndName_Success тестирует получение монитора по userID и name.
+func TestMonitorRepository_GetByUserIDAndName_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	monitorID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		monitorID, userID, "Test Monitor", "https://example.com", "HTTP", 60, 30,
+		"PENDING", nil, nil, pqArrayString([]string{"Monday"}),
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1 AND name = $2
+	`)).WithArgs(userID, "Test Monitor").WillReturnRows(rows)
+
+	monitor, err := repo.GetByUserIDAndName(context.Background(), userID, "Test Monitor")
+	assert.NoError(t, err)
+	assert.NotNil(t, monitor)
+	assert.Equal(t, monitorID, monitor.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByUserIDAndName_NotFound тестирует поиск несуществующего монитора.
+func TestMonitorRepository_GetByUserIDAndName_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1 AND name = $2
+	`)).WithArgs(userID, "NonExistent").WillReturnError(sql.ErrNoRows)
+
+	monitor, err := repo.GetByUserIDAndName(context.Background(), userID, "NonExistent")
+	assert.Error(t, err)
+	assert.Nil(t, monitor)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListByUserIDAndStatus_Success тестирует получение мониторов пользователя с фильтром по статусу.
+func TestMonitorRepository_ListByUserIDAndStatus_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		uuid.New(), userID, "Active Monitor", "https://example.com", "HTTP", 60, 30,
+		"UP", nil, nil, pqArrayString([]string{"Monday"}),
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1 AND status = $2
+		ORDER BY created_at DESC
+	`)).WithArgs(userID, domain.StatusUp).WillReturnRows(rows)
+
+	monitors, err := repo.ListByUserIDAndStatus(context.Background(), userID, domain.StatusUp)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 1)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// pqArrayString - вспомогательная функция для создания PostgreSQL array byte representation
+func pqArrayString(days []string) []byte {
+	if len(days) == 0 {
+		return nil
+	}
+	result := "{"
+	for i, d := range days {
+		if i > 0 {
+			result += ","
+		}
+		result += d
+	}
+	result += "}"
+	return []byte(result)
+}
+
+// TestMonitorRepository_GetByID_WithWorkingHours тестирует получение монитора с рабочими часами.
+func TestMonitorRepository_GetByID_WithWorkingHours(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	userID := uuid.New()
+	now := time.Now()
+	startTime := now.Truncate(time.Hour).Add(9 * time.Hour)
+	endTime := now.Truncate(time.Hour).Add(18 * time.Hour)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		monitorID, userID, "Business Hours Monitor", "https://example.com", "HTTP", 60, 30,
+		"UP", startTime, endTime, pqArrayString([]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}),
+		int64(1000), int64(50), nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE id = $1
+	`)).WithArgs(monitorID).WillReturnRows(rows)
+
+	monitor, err := repo.GetByID(context.Background(), monitorID)
+	assert.NoError(t, err)
+	assert.NotNil(t, monitor)
+	assert.NotNil(t, monitor.WorkingHoursStart)
+	assert.NotNil(t, monitor.WorkingHoursEnd)
+	assert.NotNil(t, monitor.DegradedResponseTimeThreshold)
+	assert.NotNil(t, monitor.DegradedFailureRateThreshold)
+	assert.Equal(t, 1000, *monitor.DegradedResponseTimeThreshold)
+	assert.Equal(t, 50, *monitor.DegradedFailureRateThreshold)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByID_WithLastCheck тестирует получение монитора с последней проверкой.
+func TestMonitorRepository_GetByID_WithLastCheck(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	userID := uuid.New()
+	now := time.Now()
+	lastCheck := now.Add(-5 * time.Minute)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		monitorID, userID, "Recently Checked", "https://example.com", "HTTP", 60, 30,
+		"UP", nil, nil, nil,
+		nil, nil, lastCheck, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE id = $1
+	`)).WithArgs(monitorID).WillReturnRows(rows)
+
+	monitor, err := repo.GetByID(context.Background(), monitorID)
+	assert.NoError(t, err)
+	assert.NotNil(t, monitor)
+	assert.NotNil(t, monitor.LastCheckAt)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_GetByID_InvalidStatus тестирует получение монитора с невалидным статусом.
+func TestMonitorRepository_GetByID_InvalidStatus(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	monitorID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		monitorID, uuid.New(), "Invalid Monitor", "https://example.com", "HTTP", 60, 30,
+		"INVALID_STATUS", nil, nil, nil,
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE id = $1
+	`)).WithArgs(monitorID).WillReturnRows(rows)
+
+	monitor, err := repo.GetByID(context.Background(), monitorID)
+	assert.Error(t, err)
+	assert.Nil(t, monitor)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListByUserID_WithNullWorkingDays тестирует получение мониторов с null working_days.
+func TestMonitorRepository_ListByUserID_WithNullWorkingDays(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).AddRow(
+		uuid.New(), userID, "Monitor 1", "https://example.com", "HTTP", 60, 30,
+		"UP", nil, nil, nil,
+		nil, nil, nil, now, now,
+	)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`)).WithArgs(userID, 10, 0).WillReturnRows(rows)
+
+	monitors, err := repo.ListByUserID(context.Background(), userID, 10, 0)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 1)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestMonitorRepository_ListByUserID_MultipleMonitors тестирует получение списка мониторов с разными статусами.
+func TestMonitorRepository_ListByUserID_MultipleMonitors(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := NewMonitorRepository(db)
+
+	userID := uuid.New()
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "user_id", "name", "url", "check_type", "interval_seconds", "timeout_seconds",
+		"status", "working_hours_start", "working_hours_end", "working_days",
+		"degraded_response_time_threshold", "degraded_failure_rate_threshold",
+		"last_check_at", "created_at", "updated_at",
+	}).
+		AddRow(
+			uuid.New(), userID, "Monitor 1", "https://example1.com", "HTTP", 60, 30,
+			"UP", nil, nil, pqArrayString([]string{"Monday"}),
+			nil, nil, nil, now, now,
+		).
+		AddRow(
+			uuid.New(), userID, "Monitor 2", "https://example2.com", "HTTP", 120, 30,
+			"DOWN", nil, nil, pqArrayString([]string{"Tuesday"}),
+			nil, nil, nil, now.Add(-time.Hour), now.Add(-time.Hour),
+		).
+		AddRow(
+			uuid.New(), userID, "Monitor 3", "https://example3.com", "HTTPS", 300, 60,
+			"DEGRADED", nil, nil, pqArrayString([]string{"Wednesday"}),
+			int64(2000), int64(70), nil, now.Add(-2*time.Hour), now.Add(-2*time.Hour),
+		)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, user_id, name, url, check_type, interval_seconds, timeout_seconds,
+			status, working_hours_start, working_hours_end, working_days,
+			degraded_response_time_threshold, degraded_failure_rate_threshold,
+			last_check_at, created_at, updated_at
+		FROM monitors
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`)).WithArgs(userID, 10, 0).WillReturnRows(rows)
+
+	monitors, err := repo.ListByUserID(context.Background(), userID, 10, 0)
+	assert.NoError(t, err)
+	assert.Len(t, monitors, 3)
+	assert.Equal(t, domain.StatusUp, monitors[0].Status)
+	assert.Equal(t, domain.StatusDown, monitors[1].Status)
+	assert.Equal(t, domain.StatusDegraded, monitors[2].Status)
+	assert.NotNil(t, monitors[2].DegradedResponseTimeThreshold)
+	assert.NotNil(t, monitors[2].DegradedFailureRateThreshold)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

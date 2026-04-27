@@ -1,0 +1,98 @@
+// epic=common, us=shared_types
+// Common types and messages shared across services
+
+syntax = "proto3";
+
+package common;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "google/protobuf/timestamp.proto";
+
+// User represents a user entity
+message User {
+  string id = 1;
+  string email = 2;
+  string full_name = 3;
+  string tier = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  google.protobuf.Timestamp last_login_at = 7;
+  int32 login_attempts = 8;
+  google.protobuf.Timestamp locked_until = 9;
+}
+
+// Session represents a user session
+message Session {
+  string id = 1;
+  string user_id = 2;
+  string auth_type = 3;
+  string ip_address = 4;
+  string user_agent = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+// RefreshToken represents a refresh token
+message RefreshToken {
+  string id = 1;
+  string user_id = 2;
+  string auth_type = 3;
+  string ip_address = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool is_revoked = 6;
+}
+
+// OAuthAccount represents a linked OAuth account
+message OAuthAccount {
+  string id = 1;
+  string user_id = 2;
+  string provider = 3;
+  string provider_user_id = 4;
+  string email = 5;
+  string metadata = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// Tier limits configuration
+message TierLimits {
+  int32 max_monitors = 1;
+  int32 min_check_interval_seconds = 2;
+  int32 max_alerts_per_day = 3;
+}
+
+// Tier limits for all tiers
+message AllTierLimits {
+  TierLimits free = 1;
+  TierLimits starter = 2;
+  TierLimits professional = 3;
+  TierLimits business = 4;
+}
+
+// User tier enum
+enum UserTier {
+  TIER_UNSPECIFIED = 0;
+  TIER_FREE = 1;
+  TIER_STARTER = 2;
+  TIER_PROFESSIONAL = 3;
+  TIER_BUSINESS = 4;
+}
+
+// Auth type enum
+enum AuthType {
+  AUTH_TYPE_UNSPECIFIED = 0;
+  AUTH_TYPE_PASSWORD = 1;
+  AUTH_TYPE_OAUTH_GOOGLE = 2;
+  AUTH_TYPE_OAUTH_GITHUB = 3;
+}
+
+// Error response structure
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+  string request_id = 4;
+}
+
+// Empty request
+message Empty {}

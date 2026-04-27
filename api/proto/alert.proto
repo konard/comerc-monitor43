@@ -1,0 +1,404 @@
+// epic=02_alerting, us=01_alert_channels, us=02_alert_triggering, us=03_alert_delivery
+// Alert service for managing alerts and notifications
+
+syntax = "proto3";
+
+package alert;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+
+// Alert service provides alert management
+service AlertService {
+  // uc_02_02_07: Create a new alert on monitor failure
+  rpc CreateAlert(CreateAlertRequest) returns (Alert) {
+    option (google.api.http) = {
+      post: "/api/v1/alerts"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_11: Get alert details
+  rpc GetAlert(GetAlertRequest) returns (Alert) {
+    option (google.api.http) = {
+      get: "/api/v1/alerts/{id}"
+    };
+  }
+
+  // uc_02_02_11, uc_02_02_12: List and filter alerts
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/alerts"
+    };
+  }
+
+  // uc_02_02_08: Update alert status (auto-resolve after success)
+  rpc UpdateAlert(UpdateAlertRequest) returns (Alert) {
+    option (google.api.http) = {
+      put: "/api/v1/alerts/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_09: Delete alert (retention cleanup)
+  rpc DeleteAlert(DeleteAlertRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/alerts/{id}"
+    };
+  }
+
+  // uc_02_02_39: Enable alert rule for monitor
+  rpc EnableAlert(EnableAlertRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/alerts/{id}:enable"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_40: Disable alert rule for monitor
+  rpc DisableAlert(DisableAlertRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/alerts/{id}:disable"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_06: Get user notification channels
+  rpc GetNotificationChannels(GetNotificationChannelsRequest) returns (NotificationChannels) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}/channels"
+    };
+  }
+
+  // uc_02_01_08: Update notification channels
+  rpc UpdateNotificationChannels(UpdateNotificationChannelsRequest) returns (NotificationChannels) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}/channels"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_01: Create a single notification channel
+  rpc CreateChannel(CreateChannelRequest) returns (AlertChannel) {
+    option (google.api.http) = {
+      post: "/api/v1/channels"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_06: Get a single channel by id
+  rpc GetChannel(GetChannelRequest) returns (AlertChannel) {
+    option (google.api.http) = {
+      get: "/api/v1/channels/{id}"
+    };
+  }
+
+  // uc_02_01_06: List channels of current user
+  rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/channels"
+    };
+  }
+
+  // uc_02_01_08: Update a single channel
+  rpc UpdateChannel(UpdateChannelRequest) returns (AlertChannel) {
+    option (google.api.http) = {
+      put: "/api/v1/channels/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_02_01_09: Delete a single channel
+  rpc DeleteChannel(DeleteChannelRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/channels/{id}"
+    };
+  }
+
+  // uc_02_01_05: Verify a channel (send probe message)
+  rpc VerifyChannel(VerifyChannelRequest) returns (VerifyChannelResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/channels/{id}:verify"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_06: Acknowledge active alert
+  rpc AcknowledgeAlert(AcknowledgeAlertRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/alerts/{id}:acknowledge"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_15: Mute alerts for a monitor
+  rpc MuteAlerts(MuteAlertsRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{monitor_id}/alerts:mute"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_24: Unmute alerts for a monitor
+  rpc UnmuteAlerts(UnmuteAlertsRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{monitor_id}/alerts:unmute"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_05: Get alert rules for a monitor
+  rpc GetAlertRule(GetAlertRuleRequest) returns (AlertRule) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/alert-rule"
+    };
+  }
+
+  // uc_02_02_01: Create alert rule for a monitor
+  rpc CreateAlertRule(CreateAlertRuleRequest) returns (AlertRule) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{monitor_id}/alert-rule"
+      body: "*"
+    };
+  }
+
+  // uc_02_02_44: Delete alert rule for a monitor
+  rpc DeleteAlertRule(DeleteAlertRuleRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/monitors/{monitor_id}/alert-rule"
+    };
+  }
+}
+
+// Alert type enum
+enum AlertType {
+  ALERT_TYPE_UNSPECIFIED = 0;
+  ALERT_TYPE_STATUS_CODE = 1;
+  ALERT_TYPE_RESPONSE_TIME = 2;
+  ALERT_TYPE_BODY_CONTAINS = 3;
+  ALERT_TYPE_BODY_DOES_NOT_CONTAIN = 4;
+  ALERT_TYPE_CERTIFICATE_EXPIRES = 5;
+  ALERT_TYPE_SSL_ERROR = 6;
+}
+
+// Notification channel enum
+enum NotificationChannelType {
+  NOTIFICATION_CHANNEL_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_CHANNEL_TYPE_EMAIL = 1;
+  NOTIFICATION_CHANNEL_TYPE_TELEGRAM = 2;
+  NOTIFICATION_CHANNEL_TYPE_WEBHOOK = 3;
+  NOTIFICATION_CHANNEL_TYPE_SMS = 4;
+}
+
+// Alert status enum
+enum AlertStatus {
+  ALERT_STATUS_UNSPECIFIED = 0;
+  ALERT_STATUS_ACTIVE = 1;
+  ALERT_STATUS_DISABLED = 2;
+  ALERT_STATUS_PAUSED = 3;
+}
+
+// Alert entity
+message Alert {
+  string id = 1;
+  string user_id = 2;
+  string monitor_id = 3;
+  AlertType type = 4;
+  bool enabled = 5;
+  int32 threshold_ms = 6;
+  int32 consecutive_failures = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+
+  // Type-specific fields - oneof ensures only one is set
+  oneof type_specific_fields {
+    string expected_status_code = 14;     // for STATUS_CODE type
+    int32 max_response_time_ms = 15;       // for RESPONSE_TIME type
+    string body_pattern = 16;           // for BODY_CONTAINS/DOES_NOT_CONTAIN
+    int32 days_before_expiry = 17;       // for CERTIFICATE_EXPIRES
+  }
+}
+
+// Notification channels configuration
+message NotificationChannels {
+  string user_id = 1;
+  repeated NotificationChannel channels = 2;
+}
+
+// Notification channel details
+message NotificationChannel {
+  NotificationChannelType type = 1;
+  string address = 2;  // email, telegram webhook URL, etc.
+  bool verified = 3;
+}
+
+// Request/Response messages
+
+message CreateAlertRequest {
+  string monitor_id = 1;
+  AlertType type = 2;
+  int32 threshold_ms = 3;
+  int32 consecutive_failures = 4;
+
+  // Type-specific fields - oneof ensures only one is set
+  oneof type_specific_fields {
+    string expected_status_code = 5;     // for STATUS_CODE type
+    int32 max_response_time_ms = 6;       // for RESPONSE_TIME type
+    string body_pattern = 7;           // for BODY_CONTAINS/DOES_NOT_CONTAIN
+    int32 days_before_expiry = 8;       // for CERTIFICATE_EXPIRES
+  }
+}
+
+message GetAlertRequest {
+  string id = 1;
+}
+
+message ListAlertsRequest {
+  string user_id = 1;
+  string monitor_id = 2;  // optional filter
+  AlertStatus status = 3;  // optional filter
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ListAlertsResponse {
+  repeated Alert alerts = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateAlertRequest {
+  string id = 1;
+  bool enabled = 2;
+  int32 threshold_ms = 3;
+  int32 consecutive_failures = 4;
+
+  // Type-specific fields - oneof ensures only one is set
+  oneof type_specific_fields {
+    string expected_status_code = 5;     // for STATUS_CODE type
+    int32 max_response_time_ms = 6;       // for RESPONSE_TIME type
+    string body_pattern = 7;           // for BODY_CONTAINS/DOES_NOT_CONTAIN
+    int32 days_before_expiry = 8;       // for CERTIFICATE_EXPIRES
+  }
+}
+
+message DeleteAlertRequest {
+  string id = 1;
+}
+
+message EnableAlertRequest {
+  string id = 1;
+}
+
+message DisableAlertRequest {
+  string id = 1;
+}
+
+message GetNotificationChannelsRequest {
+  string user_id = 1;
+}
+
+message UpdateNotificationChannelsRequest {
+  string user_id = 1;
+  repeated NotificationChannel channels = 2;
+}
+
+message AcknowledgeAlertRequest {
+  string id = 1;
+}
+
+message MuteAlertsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp muted_until = 2;
+}
+
+message UnmuteAlertsRequest {
+  string monitor_id = 1;
+}
+
+message GetAlertRuleRequest {
+  string monitor_id = 1;
+}
+
+message AlertRule {
+  string id = 1;
+  string user_id = 2;
+  string monitor_id = 3;
+  bool enabled = 4;
+  int32 consecutive_failures = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateAlertRuleRequest {
+  string monitor_id = 1;
+  bool enabled = 2;
+  int32 consecutive_failures = 3;
+}
+
+message DeleteAlertRuleRequest {
+  string monitor_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message AlertChannel {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string type = 4;            // TELEGRAM / EMAIL / WEBHOOK / SLACK
+  string config = 5;          // JSON-encoded channel config
+  bool enabled = 6;
+  bool verified = 7;
+  string status = 8;          // ACTIVE / DISABLED / FAILED
+  int32 priority = 9;
+  int32 failure_count = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  google.protobuf.Timestamp verified_at = 13;
+}
+
+message CreateChannelRequest {
+  string user_id = 1;
+  string name = 2;
+  string type = 3;
+  string config = 4;          // JSON
+  int32 priority = 5;
+  bool enabled = 6;
+}
+
+message GetChannelRequest {
+  string id = 1;
+}
+
+message ListChannelsRequest {
+  string user_id = 1;
+}
+
+message ListChannelsResponse {
+  repeated AlertChannel channels = 1;
+}
+
+message UpdateChannelRequest {
+  string id = 1;
+  string name = 2;
+  string config = 3;
+  int32 priority = 4;
+  optional bool enabled = 5;
+}
+
+message DeleteChannelRequest {
+  string id = 1;
+}
+
+message VerifyChannelRequest {
+  string id = 1;
+}
+
+message VerifyChannelResponse {
+  bool verified = 1;
+  string message = 2;
+}

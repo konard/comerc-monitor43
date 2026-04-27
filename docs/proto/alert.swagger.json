@@ -1,0 +1,901 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/alert.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "AlertService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/alerts": {
+      "get": {
+        "summary": "uc_02_02_11, uc_02_02_12: List and filter alerts",
+        "operationId": "AlertService_ListAlerts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertListAlertsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "monitor_id",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ALERT_STATUS_UNSPECIFIED",
+              "ALERT_STATUS_ACTIVE",
+              "ALERT_STATUS_DISABLED",
+              "ALERT_STATUS_PAUSED"
+            ],
+            "default": "ALERT_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "post": {
+        "summary": "uc_02_02_07: Create a new alert on monitor failure",
+        "operationId": "AlertService_CreateAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertAlert"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/alertCreateAlertRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/alerts/{id}": {
+      "get": {
+        "summary": "uc_02_02_11: Get alert details",
+        "operationId": "AlertService_GetAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertAlert"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "delete": {
+        "summary": "uc_02_02_09: Delete alert (retention cleanup)",
+        "operationId": "AlertService_DeleteAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "put": {
+        "summary": "uc_02_02_08: Update alert status (auto-resolve after success)",
+        "operationId": "AlertService_UpdateAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertAlert"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceUpdateAlertBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/alerts/{id}:acknowledge": {
+      "post": {
+        "summary": "uc_02_02_06: Acknowledge active alert",
+        "operationId": "AlertService_AcknowledgeAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceAcknowledgeAlertBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/alerts/{id}:disable": {
+      "post": {
+        "summary": "uc_02_02_40: Disable alert rule for monitor",
+        "operationId": "AlertService_DisableAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceDisableAlertBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/alerts/{id}:enable": {
+      "post": {
+        "summary": "uc_02_02_39: Enable alert rule for monitor",
+        "operationId": "AlertService_EnableAlert",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceEnableAlertBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/alert-rule": {
+      "get": {
+        "summary": "uc_02_02_05: Get alert rules for a monitor",
+        "operationId": "AlertService_GetAlertRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertAlertRule"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "delete": {
+        "summary": "uc_02_02_44: Delete alert rule for a monitor",
+        "operationId": "AlertService_DeleteAlertRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "post": {
+        "summary": "uc_02_02_01: Create alert rule for a monitor",
+        "operationId": "AlertService_CreateAlertRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertAlertRule"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceCreateAlertRuleBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/alerts:mute": {
+      "post": {
+        "summary": "uc_02_02_15: Mute alerts for a monitor",
+        "operationId": "AlertService_MuteAlerts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceMuteAlertsBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/alerts:unmute": {
+      "post": {
+        "summary": "uc_02_02_24: Unmute alerts for a monitor",
+        "operationId": "AlertService_UnmuteAlerts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceUnmuteAlertsBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/channels": {
+      "get": {
+        "summary": "uc_02_01_06: Get user notification channels",
+        "operationId": "AlertService_GetNotificationChannels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertNotificationChannels"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      },
+      "put": {
+        "summary": "uc_02_01_08: Update notification channels",
+        "operationId": "AlertService_UpdateNotificationChannels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/alertNotificationChannels"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AlertServiceUpdateNotificationChannelsBody"
+            }
+          }
+        ],
+        "tags": [
+          "AlertService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "AlertServiceAcknowledgeAlertBody": {
+      "type": "object"
+    },
+    "AlertServiceCreateAlertRuleBody": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "AlertServiceDisableAlertBody": {
+      "type": "object"
+    },
+    "AlertServiceEnableAlertBody": {
+      "type": "object"
+    },
+    "AlertServiceMuteAlertsBody": {
+      "type": "object",
+      "properties": {
+        "muted_until": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "AlertServiceUnmuteAlertsBody": {
+      "type": "object"
+    },
+    "AlertServiceUpdateAlertBody": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold_ms": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "expected_status_code": {
+          "type": "string",
+          "title": "for STATUS_CODE type"
+        },
+        "max_response_time_ms": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for RESPONSE_TIME type"
+        },
+        "body_pattern": {
+          "type": "string",
+          "title": "for BODY_CONTAINS/DOES_NOT_CONTAIN"
+        },
+        "days_before_expiry": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for CERTIFICATE_EXPIRES"
+        }
+      }
+    },
+    "AlertServiceUpdateNotificationChannelsBody": {
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/alertNotificationChannel"
+          }
+        }
+      }
+    },
+    "alertAlert": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/alertAlertType"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold_ms": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expected_status_code": {
+          "type": "string",
+          "title": "for STATUS_CODE type"
+        },
+        "max_response_time_ms": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for RESPONSE_TIME type"
+        },
+        "body_pattern": {
+          "type": "string",
+          "title": "for BODY_CONTAINS/DOES_NOT_CONTAIN"
+        },
+        "days_before_expiry": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for CERTIFICATE_EXPIRES"
+        }
+      },
+      "title": "Alert entity"
+    },
+    "alertAlertRule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "alertAlertStatus": {
+      "type": "string",
+      "enum": [
+        "ALERT_STATUS_UNSPECIFIED",
+        "ALERT_STATUS_ACTIVE",
+        "ALERT_STATUS_DISABLED",
+        "ALERT_STATUS_PAUSED"
+      ],
+      "default": "ALERT_STATUS_UNSPECIFIED",
+      "title": "Alert status enum"
+    },
+    "alertAlertType": {
+      "type": "string",
+      "enum": [
+        "ALERT_TYPE_UNSPECIFIED",
+        "ALERT_TYPE_STATUS_CODE",
+        "ALERT_TYPE_RESPONSE_TIME",
+        "ALERT_TYPE_BODY_CONTAINS",
+        "ALERT_TYPE_BODY_DOES_NOT_CONTAIN",
+        "ALERT_TYPE_CERTIFICATE_EXPIRES",
+        "ALERT_TYPE_SSL_ERROR"
+      ],
+      "default": "ALERT_TYPE_UNSPECIFIED",
+      "title": "Alert type enum"
+    },
+    "alertCreateAlertRequest": {
+      "type": "object",
+      "properties": {
+        "monitor_id": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/alertAlertType"
+        },
+        "threshold_ms": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "consecutive_failures": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "expected_status_code": {
+          "type": "string",
+          "title": "for STATUS_CODE type"
+        },
+        "max_response_time_ms": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for RESPONSE_TIME type"
+        },
+        "body_pattern": {
+          "type": "string",
+          "title": "for BODY_CONTAINS/DOES_NOT_CONTAIN"
+        },
+        "days_before_expiry": {
+          "type": "integer",
+          "format": "int32",
+          "title": "for CERTIFICATE_EXPIRES"
+        }
+      }
+    },
+    "alertListAlertsResponse": {
+      "type": "object",
+      "properties": {
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/alertAlert"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "alertNotificationChannel": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/alertNotificationChannelType"
+        },
+        "address": {
+          "type": "string",
+          "description": "email, telegram webhook URL, etc."
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "title": "Notification channel details"
+    },
+    "alertNotificationChannelType": {
+      "type": "string",
+      "enum": [
+        "NOTIFICATION_CHANNEL_TYPE_UNSPECIFIED",
+        "NOTIFICATION_CHANNEL_TYPE_EMAIL",
+        "NOTIFICATION_CHANNEL_TYPE_TELEGRAM",
+        "NOTIFICATION_CHANNEL_TYPE_WEBHOOK",
+        "NOTIFICATION_CHANNEL_TYPE_SMS"
+      ],
+      "default": "NOTIFICATION_CHANNEL_TYPE_UNSPECIFIED",
+      "title": "Notification channel enum"
+    },
+    "alertNotificationChannels": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/alertNotificationChannel"
+          }
+        }
+      },
+      "title": "Notification channels configuration"
+    },
+    "commonEmpty": {
+      "type": "object",
+      "title": "Empty request"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,601 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	domain "github.com/raul/monitor/backend/monitor-service/internal/model"
+	"github.com/raul/monitor/backend/monitor-service/internal/repository/interfaces"
+)
+
+// TestMonitorRepository_Integration тестирует MonitorRepository с реальной БД.
+func TestMonitorRepository_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	if os.Getenv("INTEGRATION_TEST_DB") == "" {
+		t.Skip("Set INTEGRATION_TEST_DB=1 to run integration tests with local PostgreSQL")
+	}
+	if os.Getenv("INTEGRATION_TEST_DB") == "" {
+		t.Skip("Set INTEGRATION_TEST_DB=1 to run integration tests with local PostgreSQL")
+	}
+
+	ctx := context.Background()
+
+	// Setup PostgreSQL container
+	pgContainer, err := testcontainers.SetupPostgreSQLContainer(ctx)
+	require.NoError(t, err)
+	defer func() {
+		if err := testcontainers.TeardownPostgreSQLContainer(ctx, pgContainer); err != nil {
+			t.Errorf("Failed to teardown container: %v", err)
+		}
+	}()
+
+	// Create database connection
+	db, err := NewDB(pgContainer.ConnectionString)
+	require.NoError(t, err)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("Failed to close database: %v", err)
+		}
+	}()
+
+	// Run migrations
+	err = runMigrationsForTest(db.DB)
+	require.NoError(t, err)
+
+	// Create repository
+	repo := NewMonitorRepository(db.DB)
+
+	// Test data
+	userID := uuid.New()
+
+	t.Run("CreateMonitor successfully creates a monitor", func(t *testing.T) {
+		monitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Test Monitor",
+			URL:             "https://example.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+
+		err := repo.Create(ctx, monitor)
+
+		require.NoError(t, err)
+		assert.NotEqual(t, uuid.Nil, monitor.ID)
+		assert.Equal(t, userID, monitor.UserID)
+		assert.Equal(t, "Test Monitor", monitor.Name)
+		assert.Equal(t, domain.StatusPending, monitor.Status)
+	})
+
+	t.Run("GetMonitor returns existing monitor", func(t *testing.T) {
+		// First create a monitor
+		monitorToCreate := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Get Test",
+			URL:             "https://get-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToCreate)
+		require.NoError(t, err)
+
+		// Then get it
+		found, err := repo.GetByID(ctx, monitorToCreate.ID)
+
+		require.NoError(t, err)
+		assert.NotNil(t, found)
+		assert.Equal(t, monitorToCreate.ID, found.ID)
+		assert.Equal(t, "Get Test", found.Name)
+	})
+
+	t.Run("GetMonitor returns ErrMonitorNotFound for non-existent monitor", func(t *testing.T) {
+		nonExistentID := uuid.New()
+
+		found, err := repo.GetByID(ctx, nonExistentID)
+
+		assert.Error(t, err)
+		assert.Equal(t, interfaces.ErrMonitorNotFound, err)
+		assert.Nil(t, found)
+	})
+
+	t.Run("ListByUserID returns user's monitors", func(t *testing.T) {
+		// Create multiple monitors
+		monitor1 := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Monitor 1",
+			URL:             "https://monitor1.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitor1)
+		require.NoError(t, err)
+
+		monitor2 := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Monitor 2",
+			URL:             "https://monitor2.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err = repo.Create(ctx, monitor2)
+		require.NoError(t, err)
+
+		// List monitors
+		monitors, err := repo.ListByUserID(ctx, userID, 10, 0)
+
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(monitors), 2) // At least our 2 monitors
+	})
+
+	t.Run("UpdateMonitor updates monitor fields", func(t *testing.T) {
+		// Create a monitor
+		monitorToUpdate := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Update Test",
+			URL:             "https://update-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToUpdate)
+		require.NoError(t, err)
+
+		// Update it
+		newName := "Updated Monitor"
+		newURL := "https://updated.com"
+		newInterval := 120
+
+		monitorToUpdate.Name = newName
+		monitorToUpdate.URL = newURL
+		monitorToUpdate.IntervalSeconds = newInterval
+
+		err = repo.Update(ctx, monitorToUpdate)
+
+		require.NoError(t, err)
+
+		// Verify
+		found, err := repo.GetByID(ctx, monitorToUpdate.ID)
+		require.NoError(t, err)
+		assert.Equal(t, newName, found.Name)
+		assert.Equal(t, newURL, found.URL)
+		assert.Equal(t, newInterval, found.IntervalSeconds)
+	})
+
+	t.Run("UpdateStatus changes monitor status", func(t *testing.T) {
+		// Create a monitor
+		monitorToCreate := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Status Test",
+			URL:             "https://status-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToCreate)
+		require.NoError(t, err)
+
+		// Update status
+		err = repo.UpdateStatus(ctx, monitorToCreate.ID, domain.StatusUp)
+
+		require.NoError(t, err)
+
+		// Verify
+		found, err := repo.GetByID(ctx, monitorToCreate.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusUp, found.Status)
+	})
+
+	t.Run("DeleteMonitor removes monitor", func(t *testing.T) {
+		// Create a monitor
+		monitorToDelete := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Delete Test",
+			URL:             "https://delete-test.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToDelete)
+		require.NoError(t, err)
+
+		// Delete it
+		err = repo.Delete(ctx, monitorToDelete.ID)
+
+		require.NoError(t, err)
+
+		// Verify it's deleted
+		found, err := repo.GetByID(ctx, monitorToDelete.ID)
+		assert.Error(t, err)
+		assert.Equal(t, interfaces.ErrMonitorNotFound, err)
+		assert.Nil(t, found)
+	})
+
+	t.Run("GetByUserIDAndName returns monitor by name", func(t *testing.T) {
+		uniqueName := "Unique Name Test"
+
+		// Create a monitor with unique name
+		monitorToCreate := &domain.Monitor{
+			UserID:          userID,
+			Name:            uniqueName,
+			URL:             "https://unique.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToCreate)
+		require.NoError(t, err)
+
+		// Get by name
+		found, err := repo.GetByUserIDAndName(ctx, userID, uniqueName)
+
+		require.NoError(t, err)
+		assert.NotNil(t, found)
+		assert.Equal(t, monitorToCreate.ID, found.ID)
+		assert.Equal(t, uniqueName, found.Name)
+	})
+
+	t.Run("GetByUserIDAndName returns ErrMonitorNotFound for non-existent name", func(t *testing.T) {
+		_, err := repo.GetByUserIDAndName(ctx, userID, "Non-existent Name")
+
+		assert.Error(t, err)
+		assert.Equal(t, interfaces.ErrMonitorNotFound, err)
+	})
+
+	t.Run("CountByUserID returns correct count", func(t *testing.T) {
+		// Count current monitors for this user
+		count, err := repo.CountByUserID(ctx, userID)
+
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, count, 0)
+	})
+
+	t.Run("ExistsByName returns true for existing monitor", func(t *testing.T) {
+		// Create a monitor
+		monitorToCreate := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Exists Test",
+			URL:             "https://exists.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitorToCreate)
+		require.NoError(t, err)
+
+		// Check existence
+		exists, err := repo.ExistsByName(ctx, userID, "Exists Test")
+
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("ExistsByName returns false for non-existent monitor", func(t *testing.T) {
+		exists, err := repo.ExistsByName(ctx, userID, "Non-existent Name")
+
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("ListActive returns only active monitors", func(t *testing.T) {
+		// Create an active monitor
+		activeMonitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Active Monitor",
+			URL:             "https://active.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusUp,
+		}
+		err := repo.Create(ctx, activeMonitor)
+		require.NoError(t, err)
+
+		// Create a paused monitor
+		pausedMonitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Paused Monitor",
+			URL:             "https://paused.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPaused,
+		}
+		err = repo.Create(ctx, pausedMonitor)
+		require.NoError(t, err)
+
+		// List active monitors
+		activeMonitors, err := repo.ListActive(ctx)
+
+		require.NoError(t, err)
+		assert.Greater(t, len(activeMonitors), 0) // Should have at least our active monitor
+	})
+
+	t.Run("ListByUserIDAndStatus filters by status", func(t *testing.T) {
+		// Create monitors with different statuses
+		upMonitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "UP Monitor",
+			URL:             "https://up.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusUp,
+		}
+		err := repo.Create(ctx, upMonitor)
+		require.NoError(t, err)
+
+		downMonitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "DOWN Monitor",
+			URL:             "https://down.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusDown,
+		}
+		err = repo.Create(ctx, downMonitor)
+		require.NoError(t, err)
+
+		// List UP monitors
+		upMonitors, err := repo.ListByUserIDAndStatus(ctx, userID, domain.StatusUp)
+
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(upMonitors), 1) // At least our UP monitor
+	})
+}
+
+// TestMonitorRepository_StatusTransitions тестирует переходы статусов.
+func TestMonitorRepository_StatusTransitions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	if os.Getenv("INTEGRATION_TEST_DB") == "" {
+		t.Skip("Set INTEGRATION_TEST_DB=1 to run integration tests with local PostgreSQL")
+	}
+
+	ctx := context.Background()
+
+	// Setup PostgreSQL container
+	pgContainer, err := testcontainers.SetupPostgreSQLContainer(ctx)
+	require.NoError(t, err)
+	defer func() {
+		if err := testcontainers.TeardownPostgreSQLContainer(ctx, pgContainer); err != nil {
+			t.Errorf("Failed to teardown container: %v", err)
+		}
+	}()
+
+	// Create database connection
+	db, err := NewDB(pgContainer.ConnectionString)
+	require.NoError(t, err)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("Failed to close database: %v", err)
+		}
+	}()
+
+	// Run migrations
+	err = runMigrationsForTest(db.DB)
+	require.NoError(t, err)
+
+	// Create repository
+	repo := NewMonitorRepository(db.DB)
+	userID := uuid.New()
+
+	t.Run("PENDING to UP transition", func(t *testing.T) {
+		monitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Status Transition",
+			URL:             "https://status.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitor)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusUp)
+		require.NoError(t, err)
+
+		found, err := repo.GetByID(ctx, monitor.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusUp, found.Status)
+	})
+
+	t.Run("UP to DOWN transition", func(t *testing.T) {
+		monitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Status Down",
+			URL:             "https://down.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitor)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusUp)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusDown)
+		require.NoError(t, err)
+
+		found, err := repo.GetByID(ctx, monitor.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusDown, found.Status)
+	})
+
+	t.Run("DOWN to UP transition", func(t *testing.T) {
+		monitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Status Recovery",
+			URL:             "https://recovery.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitor)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusDown)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusUp)
+		require.NoError(t, err)
+
+		found, err := repo.GetByID(ctx, monitor.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusUp, found.Status)
+	})
+
+	t.Run("UP to PAUSED transition", func(t *testing.T) {
+		monitor := &domain.Monitor{
+			UserID:          userID,
+			Name:            "Status Pause",
+			URL:             "https://pause.com",
+			CheckType:       "HTTP",
+			IntervalSeconds: 60,
+			TimeoutSeconds:  30,
+			Status:          domain.StatusPending,
+		}
+		err := repo.Create(ctx, monitor)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusUp)
+		require.NoError(t, err)
+
+		err = repo.UpdateStatus(ctx, monitor.ID, domain.StatusPaused)
+		require.NoError(t, err)
+
+		found, err := repo.GetByID(ctx, monitor.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusPaused, found.Status)
+	})
+}
+
+// TestMonitorRepository_ConcurrentOperations тестирует конкурентные операции.
+func TestMonitorRepository_ConcurrentOperations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	if os.Getenv("INTEGRATION_TEST_DB") == "" {
+		t.Skip("Set INTEGRATION_TEST_DB=1 to run integration tests with local PostgreSQL")
+	}
+
+	ctx := context.Background()
+
+	// Setup PostgreSQL container
+	pgContainer, err := testcontainers.SetupPostgreSQLContainer(ctx)
+	require.NoError(t, err)
+	defer func() {
+		if err := testcontainers.TeardownPostgreSQLContainer(ctx, pgContainer); err != nil {
+			t.Errorf("Failed to teardown container: %v", err)
+		}
+	}()
+
+	// Create database connection
+	db, err := NewDB(pgContainer.ConnectionString)
+	require.NoError(t, err)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("Failed to close database: %v", err)
+		}
+	}()
+
+	// Run migrations
+	err = runMigrationsForTest(db.DB)
+	require.NoError(t, err)
+
+	// Create repository
+	repo := NewMonitorRepository(db.DB)
+	userID := uuid.New()
+
+	t.Run("concurrent creates don't cause conflicts", func(t *testing.T) {
+		const numMonitors = 10
+
+		// Create monitors concurrently
+		errChan := make(chan error, numMonitors)
+		for i := 0; i < numMonitors; i++ {
+			go func(index int) {
+				name := fmt.Sprintf("Concurrent Monitor %d", index)
+				url := fmt.Sprintf("https://concurrent-%d.com", index)
+				monitor := &domain.Monitor{
+					UserID:          userID,
+					Name:            name,
+					URL:             url,
+					CheckType:       "HTTP",
+					IntervalSeconds: 60,
+					TimeoutSeconds:  30,
+					Status:          domain.StatusPending,
+				}
+				err := repo.Create(ctx, monitor)
+				errChan <- err
+			}(i)
+		}
+
+		// Collect results
+		for i := 0; i < numMonitors; i++ {
+			err := <-errChan
+			assert.NoError(t, err)
+		}
+
+		// Verify all were created
+		monitors, err := repo.ListByUserID(ctx, userID, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(monitors), numMonitors)
+	})
+}
+
+// runMigrationsForTest запускает миграции для тестов.
+func runMigrationsForTest(db *sql.DB) error {
+	// Create monitors table
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS monitors (
+			id UUID PRIMARY KEY,
+			user_id UUID NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			url VARCHAR(2048) NOT NULL,
+			check_type VARCHAR(50) NOT NULL DEFAULT 'HTTP',
+			interval_seconds INTEGER NOT NULL CHECK (interval_seconds >= 30 AND interval_seconds <= 3600),
+			timeout_seconds INTEGER NOT NULL DEFAULT 30 CHECK (timeout_seconds < interval_seconds),
+			status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+			working_hours_start TIME,
+			working_hours_end TIME,
+			working_days VARCHAR(20)[],
+			degraded_response_time_threshold INTEGER,
+			degraded_failure_rate_threshold INTEGER,
+			last_check_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			UNIQUE(user_id, name)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_monitors_user_id ON monitors(user_id);
+		CREATE INDEX IF NOT EXISTS idx_monitors_status ON monitors(status);
+	`)
+
+	return err
+}

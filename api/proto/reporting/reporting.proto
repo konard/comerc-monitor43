@@ -1,0 +1,206 @@
+syntax = "proto3";
+
+package reporting;
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/raul/monitor/api/proto/reporting;reportingv1";
+
+// epic=06_reporting, us=06_01_sla_reports
+service ReportingService {
+  // uc_06_01_01: Генерация SLA отчёта за период
+  rpc GenerateSLAReport(GenerateSLAReportRequest) returns (SLAReport) {
+    option (google.api.http) = {
+      post: "/api/v1/reports/sla"
+      body: "*"
+    };
+  }
+
+  // uc_06_01_04: Получение списка SLA отчётов
+  rpc ListSLAReports(ListSLAReportsRequest) returns (ListSLAReportsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/sla"
+    };
+  }
+
+  // uc_06_01_04: Получение SLA отчёта по ID
+  rpc GetSLAReport(GetSLAReportRequest) returns (SLAReport) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/sla/{report_id}"
+    };
+  }
+
+  // uc_06_02_01: Получение метрик response time за период
+  rpc GetResponseTimeMetrics(GetResponseTimeMetricsRequest) returns (ResponseTimeMetricsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/analytics/response-time/{monitor_id}"
+    };
+  }
+
+  // uc_06_02_04: Получение инцидентов за период
+  rpc GetIncidentsReport(GetIncidentsReportRequest) returns (GetIncidentsReportResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/analytics/incidents/{monitor_id}"
+    };
+  }
+
+  // uc_06_02_07: Получение распределения проверок по статус-кодам
+  rpc GetCheckCountByStatus(GetCheckCountByStatusRequest) returns (GetCheckCountByStatusResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/analytics/check-count/{monitor_id}"
+    };
+  }
+
+  // uc_06_02_06: Экспорт отчёта в CSV
+  rpc ExportReportCSV(ExportReportCSVRequest) returns (ExportReportCSVResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/export/csv/{monitor_id}"
+    };
+  }
+
+  // uc_06_01_05: Экспорт SLA отчёта в PDF
+  rpc ExportReportPDF(ExportReportPDFRequest) returns (ExportReportPDFResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/reports/export/pdf/{report_id}"
+    };
+  }
+}
+
+// GenerateSLAReportRequest запрос на генерацию SLA отчёта.
+message GenerateSLAReportRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+// SLAReport представляет SLA отчёт.
+message SLAReport {
+  string id = 1;
+  string monitor_id = 2;
+  string monitor_name = 3;
+  google.protobuf.Timestamp period_start = 4;
+  google.protobuf.Timestamp period_end = 5;
+  double availability = 6;
+  int32 total_checks = 7;
+  int32 up_checks = 8;
+  int32 down_checks = 9;
+  int32 degraded_checks = 10;
+  int32 paused_checks = 11;
+  int64 total_downtime_seconds = 12;
+  int32 incidents_count = 13;
+  google.protobuf.Timestamp created_at = 14;
+}
+
+// ListSLAReportsRequest запрос на список SLA отчётов.
+message ListSLAReportsRequest {
+  string monitor_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// ListSLAReportsResponse ответ со списком SLA отчётов.
+message ListSLAReportsResponse {
+  repeated SLAReport reports = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// GetSLAReportRequest запрос на SLA отчёт по ID.
+message GetSLAReportRequest {
+  string report_id = 1;
+}
+
+// GetResponseTimeMetricsRequest запрос на метрики response time.
+message GetResponseTimeMetricsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+// ResponseTimeMetricsResponse ответ с метриками response time.
+message ResponseTimeMetricsResponse {
+  string monitor_id = 1;
+  int32 p50 = 2;
+  int32 p95 = 3;
+  int32 p99 = 4;
+  int32 average = 5;
+  int32 min = 6;
+  int32 max = 7;
+  int32 total_checks = 8;
+}
+
+// GetIncidentsReportRequest запрос на инциденты за период.
+message GetIncidentsReportRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  string status = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+// IncidentReport представляет инцидент в отчёте.
+message IncidentReport {
+  string id = 1;
+  string monitor_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int64 duration_seconds = 5;
+  string status = 6;
+  int32 failed_checks = 7;
+}
+
+// GetIncidentsReportResponse ответ с инцидентами.
+message GetIncidentsReportResponse {
+  repeated IncidentReport incidents = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// GetCheckCountByStatusRequest запрос на распределение проверок по статус-кодам.
+message GetCheckCountByStatusRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+// StatusCount количество проверок для группы статус-кодов.
+message StatusCount {
+  string status_group = 1;
+  int32 count = 2;
+}
+
+// GetCheckCountByStatusResponse ответ с распределением проверок.
+message GetCheckCountByStatusResponse {
+  string monitor_id = 1;
+  repeated StatusCount status_counts = 2;
+  int32 total = 3;
+}
+
+// ExportReportCSVRequest запрос на экспорт отчёта в CSV.
+message ExportReportCSVRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+}
+
+// ExportReportCSVResponse ответ с CSV данными.
+message ExportReportCSVResponse {
+  bytes content = 1;
+  string filename = 2;
+  int32 rows = 3;
+}
+
+// ExportReportPDFRequest запрос на экспорт SLA отчёта в PDF.
+message ExportReportPDFRequest {
+  string report_id = 1;
+}
+
+// ExportReportPDFResponse ответ с PDF данными.
+message ExportReportPDFResponse {
+  bytes content = 1;
+  string filename = 2;
+}

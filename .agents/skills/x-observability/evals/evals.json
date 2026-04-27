@@ -1,0 +1,61 @@
+{
+  "skill_name": "x-observability",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Добавляю новый внешний HTTP client в сервис. Что по observability нужно сделать на уровне package и приложения?",
+      "expected_output": "Агент разделяет app bootstrap через monitoring и package-level observability: tracer, осмысленные metrics и человекочитаемые логи без лишнего дублирования.",
+      "files": [],
+      "expectations": [
+        "Упомянут monitoring.InitDefault для app bootstrap",
+        "Упомянут package-level tracer",
+        "Нет требования падать при ошибке tracing/metrics init",
+        "Метрики предлагаются только там, где пакет владеет meaningful сигналом",
+        "Логи описаны как человекочитаемые, а не как дублирование span data"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Нужно расставить middleware для HTTP сервера: monitoring, recovery, auth и прикладные middleware. Какой порядок взять?",
+      "expected_output": "Агент рекомендует monitoring снаружи, recovery после него, затем auth и прикладные middleware.",
+      "files": [],
+      "expectations": [
+        "Monitoring идёт раньше Recovery",
+        "Порядок мотивирован видимостью 500 после panic recovery"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "В GraphQL уже есть HTTP monitoring. Что должен делать GraphQL observability layer поверх него?",
+      "expected_output": "Агент описывает child span и enrichment существующего HTTP span.",
+      "files": [],
+      "expectations": [
+        "GraphQL слой не создаёт независимую конкурирующую observability-схему",
+        "Упомянут child span на GraphQL operation",
+        "Ответ требует operation name/type в логах и/или метриках GraphQL слоя",
+        "Есть ссылка на reference file или adapters/graphql observability pattern"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "У меня чистая domain-функция без I/O. Нужно ли туда тащить tracer, meter и extra logging только ради единообразия?",
+      "expected_output": "Агент не триггерит observability workflow на pure domain case и явно отказывает от лишней инструментации.",
+      "files": [],
+      "expectations": [
+        "Ответ явно говорит, что для pure domain функции без I/O этот skill не нужен",
+        "Ответ не советует добавлять tracer и meter ради формального единообразия"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Нужно инструментировать gRPC слой: bootstrap уже есть, теперь интересует interceptor chain и observability path внутри gRPC.",
+      "expected_output": "Агент покрывает gRPC branch observability workflow и связывает его с готовым SetupMonitoring path.",
+      "files": [],
+      "expectations": [
+        "Ответ рекомендует SetupMonitoring из adapters/grpc/middleware или эквивалентный готовый path",
+        "Ответ не придумывает отдельный несогласованный порядок middleware",
+        "Ответ сохраняет связь с общими правилами tracing/logging/metrics"
+      ]
+    }
+  ]
+}

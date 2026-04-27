@@ -1,0 +1,568 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/raul/monitor/backend/scheduler-service/internal/model"
+	"github.com/raul/monitor/backend/scheduler-service/internal/monitor"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+type mockWorkerRepo struct {
+	mock.Mock
+}
+
+func (m *mockWorkerRepo) Create(ctx context.Context, w *model.Worker) error {
+	args := m.Called(ctx, w)
+	return args.Error(0)
+}
+
+func (m *mockWorkerRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Worker, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Worker), args.Error(1)
+}
+
+func (m *mockWorkerRepo) GetByName(ctx context.Context, name string) (*model.Worker, error) {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Worker), args.Error(1)
+}
+
+func (m *mockWorkerRepo) List(ctx context.Context, status, zone string, page, pageSize int) ([]*model.Worker, int, error) {
+	args := m.Called(ctx, status, zone, page, pageSize)
+	return args.Get(0).([]*model.Worker), args.Get(1).(int), args.Error(2)
+}
+
+func (m *mockWorkerRepo) Update(ctx context.Context, w *model.Worker) error {
+	args := m.Called(ctx, w)
+	return args.Error(0)
+}
+
+func (m *mockWorkerRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *mockWorkerRepo) ListExpired(ctx context.Context, timeout time.Duration) ([]*model.Worker, error) {
+	args := m.Called(ctx, timeout)
+	return args.Get(0).([]*model.Worker), args.Error(1)
+}
+
+func (m *mockWorkerRepo) ListIdleByZone(ctx context.Context, zone string) ([]*model.Worker, error) {
+	args := m.Called(ctx, zone)
+	return args.Get(0).([]*model.Worker), args.Error(1)
+}
+
+func (m *mockWorkerRepo) ListOfflineForCleanup(ctx context.Context, cutoff string) ([]*model.Worker, error) {
+	args := m.Called(ctx, cutoff)
+	return args.Get(0).([]*model.Worker), args.Error(1)
+}
+
+type mockCheckRepo struct {
+	mock.Mock
+}
+
+func (m *mockCheckRepo) Create(ctx context.Context, c *model.ScheduledCheck) error {
+	args := m.Called(ctx, c)
+	return args.Error(0)
+}
+
+func (m *mockCheckRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.ScheduledCheck, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.ScheduledCheck), args.Error(1)
+}
+
+func (m *mockCheckRepo) GetByMonitorID(ctx context.Context, id uuid.UUID) (*model.ScheduledCheck, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.ScheduledCheck), args.Error(1)
+}
+
+func (m *mockCheckRepo) Update(ctx context.Context, c *model.ScheduledCheck) error {
+	args := m.Called(ctx, c)
+	return args.Error(0)
+}
+
+func (m *mockCheckRepo) ListPendingByWorkerID(ctx context.Context, id uuid.UUID) ([]*model.ScheduledCheck, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).([]*model.ScheduledCheck), args.Error(1)
+}
+
+func (m *mockCheckRepo) ListByTimeRange(ctx context.Context, from, to time.Time, status string, page, pageSize int) ([]*model.ScheduledCheck, int, error) {
+	args := m.Called(ctx, from, to, status, page, pageSize)
+	return args.Get(0).([]*model.ScheduledCheck), args.Get(1).(int), args.Error(2)
+}
+
+func (m *mockCheckRepo) ListOverdue(ctx context.Context, threshold time.Duration) ([]*model.ScheduledCheck, error) {
+	args := m.Called(ctx, threshold)
+	return args.Get(0).([]*model.ScheduledCheck), args.Error(1)
+}
+
+func (m *mockCheckRepo) ReassignByWorkerID(ctx context.Context, id uuid.UUID) (int, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(int), args.Error(1)
+}
+
+func (m *mockCheckRepo) DeleteCompletedBefore(ctx context.Context, before time.Time) error {
+	args := m.Called(ctx, before)
+	return args.Error(0)
+}
+
+func (m *mockCheckRepo) HasPendingCheck(ctx context.Context, id uuid.UUID) (bool, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(bool), args.Error(1)
+}
+
+type mockAuditRepo struct {
+	mock.Mock
+}
+
+func (m *mockAuditRepo) Create(ctx context.Context, action string, workerID, checkID, monitorID uuid.UUID, details map[string]interface{}) error {
+	args := m.Called(ctx, action, workerID, checkID, monitorID, details)
+	return args.Error(0)
+}
+
+func newTestWorkerService(t *testing.T) (*WorkerService, *mockWorkerRepo, *mockCheckRepo, *mockAuditRepo) {
+	t.Helper()
+	workerRepo := &mockWorkerRepo{}
+	checkRepo := &mockCheckRepo{}
+	auditRepo := &mockAuditRepo{}
+	logger := slog.Default()
+	svc := NewWorkerService(workerRepo, checkRepo, auditRepo, 30*time.Second, 10*time.Minute, logger)
+	return svc, workerRepo, checkRepo, auditRepo
+}
+
+func TestRegisterWorker(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, auditRepo := newTestWorkerService(t)
+
+	workerRepo.On("GetByName", mock.Anything, "worker-msk-01").Return(nil, errors.New("not found"))
+	workerRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
+	auditRepo.On("Create", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	worker, err := svc.RegisterWorker(context.Background(), "worker-msk-01", "moscow", map[string]string{"version": "1.0.0"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "worker-msk-01", worker.Name)
+	assert.Equal(t, "moscow", worker.Zone)
+	assert.Equal(t, "1.0.0", worker.Metadata["version"])
+	workerRepo.AssertCalled(t, "Create", mock.Anything, mock.Anything)
+}
+
+func TestRegisterWorker_duplicate_name(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	existing := model.NewWorker("worker-msk-01", "msk")
+	workerRepo.On("GetByName", mock.Anything, "worker-msk-01").Return(existing, nil)
+
+	_, err := svc.RegisterWorker(context.Background(), "worker-msk-01", "msk", nil)
+
+	assert.ErrorIs(t, err, model.ErrWorkerNameExists)
+	workerRepo.AssertNotCalled(t, "Create")
+}
+
+func TestRegisterWorker_empty_name(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _ := newTestWorkerService(t)
+
+	_, err := svc.RegisterWorker(context.Background(), "", "msk", nil)
+
+	assert.ErrorIs(t, err, model.ErrWorkerNameRequired)
+}
+
+func TestRegisterWorker_whitespace_name(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _ := newTestWorkerService(t)
+
+	_, err := svc.RegisterWorker(context.Background(), "   ", "msk", nil)
+
+	assert.ErrorIs(t, err, model.ErrWorkerNameRequired)
+}
+
+func TestRegisterWorker_name_too_long(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _ := newTestWorkerService(t)
+	longName := string(make([]byte, 256))
+
+	_, err := svc.RegisterWorker(context.Background(), longName, "msk", nil)
+
+	assert.ErrorIs(t, err, model.ErrWorkerNameTooLong)
+}
+
+func TestRegisterWorker_empty_zone(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _ := newTestWorkerService(t)
+
+	_, err := svc.RegisterWorker(context.Background(), "worker-01", "", nil)
+
+	assert.ErrorIs(t, err, model.ErrInvalidZone)
+}
+
+func TestHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	worker := model.NewWorker("worker-01", "msk")
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(worker, nil)
+	workerRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+
+	err := svc.Heartbeat(context.Background(), worker.ID, model.WorkerStatusBusy, 100, 5, 245.5)
+
+	require.NoError(t, err)
+	workerRepo.AssertCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
+func TestHeartbeat_not_found(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+
+	err := svc.Heartbeat(context.Background(), uuid.New(), model.WorkerStatusIdle, 0, 0, 0)
+
+	assert.ErrorIs(t, err, model.ErrWorkerNotFound)
+}
+
+func TestUnregisterWorker(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, checkRepo, auditRepo := newTestWorkerService(t)
+	worker := model.NewWorker("worker-01", "msk")
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(worker, nil)
+	checkRepo.On("ReassignByWorkerID", mock.Anything, mock.Anything).Return(2, nil)
+	workerRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
+	auditRepo.On("Create", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	err := svc.UnregisterWorker(context.Background(), worker.ID)
+
+	require.NoError(t, err)
+	workerRepo.AssertCalled(t, "Delete", mock.Anything, mock.Anything)
+}
+
+func TestUnregisterWorker_not_found(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+
+	err := svc.UnregisterWorker(context.Background(), uuid.New())
+
+	assert.ErrorIs(t, err, model.ErrWorkerNotFound)
+}
+
+func TestGetWorkerStatus(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	worker := model.NewWorker("worker-01", "msk")
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(worker, nil)
+
+	result, err := svc.GetWorkerStatus(context.Background(), worker.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "worker-01", result.Name)
+}
+
+func TestGetWorkerStatus_not_found(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	workerRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+
+	_, err := svc.GetWorkerStatus(context.Background(), uuid.New())
+
+	assert.ErrorIs(t, err, model.ErrWorkerNotFound)
+}
+
+func TestSelectWorker_idle_available(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	w := model.NewWorker("worker-01", "msk")
+	workerRepo.On("ListIdleByZone", mock.Anything, "moscow").Return([]*model.Worker{w}, nil)
+
+	result, err := svc.SelectWorker(context.Background(), "moscow")
+
+	require.NoError(t, err)
+	assert.Equal(t, "worker-01", result.Name)
+}
+
+func TestSelectWorker_fallback_to_any_zone(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	w := model.NewWorker("worker-spb-01", "spb")
+	workerRepo.On("ListIdleByZone", mock.Anything, "moscow").Return([]*model.Worker{}, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{w}, nil)
+
+	result, err := svc.SelectWorker(context.Background(), "moscow")
+
+	require.NoError(t, err)
+	assert.Equal(t, "worker-spb-01", result.Name)
+}
+
+func TestSelectWorker_no_workers(t *testing.T) {
+	t.Parallel()
+
+	svc, workerRepo, _, _ := newTestWorkerService(t)
+	workerRepo.On("ListIdleByZone", mock.Anything, "moscow").Return([]*model.Worker{}, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{}, nil)
+
+	_, err := svc.SelectWorker(context.Background(), "moscow")
+
+	assert.ErrorIs(t, err, model.ErrNoWorkersAvailable)
+}
+
+func TestScheduleCheck_success(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	workerRepo := &mockWorkerRepo{}
+	auditRepo := &mockAuditRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, auditRepo, nil, 2*time.Minute, logger)
+
+	checkRepo.On("HasPendingCheck", mock.Anything, mock.Anything).Return(false, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{}, nil)
+	checkRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
+
+	result, err := svc.ScheduleCheck(ctx, uuid.New(), model.PriorityNormal, time.Now())
+
+	require.NoError(t, err)
+	assert.Equal(t, model.CheckStatusPending, result.Status)
+}
+
+func TestScheduleCheck_already_pending(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	workerRepo := &mockWorkerRepo{}
+	auditRepo := &mockAuditRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, auditRepo, nil, 2*time.Minute, logger)
+
+	checkRepo.On("HasPendingCheck", mock.Anything, mock.Anything).Return(true, nil)
+
+	_, err := svc.ScheduleCheck(ctx, uuid.New(), model.PriorityNormal, time.Now())
+
+	assert.ErrorIs(t, err, model.ErrCheckAlreadyPending)
+	checkRepo.AssertNotCalled(t, "Create")
+}
+
+func TestScheduleCheck_with_worker(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	worker := model.NewWorker("worker-01", "msk")
+	workerRepo := &mockWorkerRepo{}
+	auditRepo := &mockAuditRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, auditRepo, nil, 2*time.Minute, logger)
+
+	checkRepo.On("HasPendingCheck", mock.Anything, mock.Anything).Return(false, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{worker}, nil)
+	checkRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
+
+	result, err := svc.ScheduleCheck(ctx, uuid.New(), model.PriorityNormal, time.Now())
+
+	require.NoError(t, err)
+	assert.Equal(t, worker.ID, result.WorkerID)
+	assert.Equal(t, model.CheckStatusInProgress, result.Status)
+}
+
+func TestGetScheduledChecks_invalid_time_range(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, nil, nil, nil, 2*time.Minute, logger)
+
+	from := time.Now()
+	to := from.Add(-1 * time.Hour)
+
+	_, _, err := svc.GetScheduledChecks(ctx, from, to, "", 1, 20)
+
+	assert.ErrorIs(t, err, model.ErrInvalidTimeRange)
+}
+
+func TestGetNextCheck_not_found(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, nil, nil, nil, 2*time.Minute, logger)
+
+	checkRepo.On("GetByMonitorID", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
+
+	_, err := svc.GetNextCheck(ctx, uuid.New())
+
+	assert.ErrorIs(t, err, model.ErrMonitorNotFound)
+}
+
+func TestCompleteCheck_success(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	check := model.NewScheduledCheck(uuid.New(), model.PriorityNormal, time.Now())
+	check.Assign(uuid.New())
+	checkRepo := &mockCheckRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, nil, nil, nil, 2*time.Minute, logger)
+
+	checkRepo.On("GetByID", mock.Anything, mock.Anything).Return(check, nil)
+	checkRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+
+	err := svc.CompleteCheck(ctx, check.ID, false, "")
+
+	require.NoError(t, err)
+	assert.Equal(t, model.CheckStatusCompleted, check.Status)
+}
+
+func TestCompleteCheck_failed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	check := model.NewScheduledCheck(uuid.New(), model.PriorityNormal, time.Now())
+	check.Assign(uuid.New())
+	checkRepo := &mockCheckRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, nil, nil, nil, 2*time.Minute, logger)
+
+	checkRepo.On("GetByID", mock.Anything, mock.Anything).Return(check, nil)
+	checkRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+
+	err := svc.CompleteCheck(ctx, check.ID, true, "connection refused")
+
+	require.NoError(t, err)
+	assert.Equal(t, model.CheckStatusFailed, check.Status)
+	assert.Equal(t, "connection refused", check.ErrorMessage)
+}
+
+func TestTriggerScheduledCheck_paused_monitor(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	workerRepo := &mockWorkerRepo{}
+	auditRepo := &mockAuditRepo{}
+	monitorClient := &mockMonitorClientForScheduler{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, auditRepo, monitorClient, 2*time.Minute, logger)
+
+	monitorClient.On("IsMonitorPaused", mock.Anything, mock.Anything).Return(true, nil)
+
+	monitorID := uuid.New()
+	_, err := svc.TriggerScheduledCheck(ctx, monitorID, model.PriorityHigh)
+
+	assert.ErrorIs(t, err, model.ErrCheckAlreadyPending)
+}
+
+func TestTriggerScheduledCheck_monitor_not_found(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	checkRepo := &mockCheckRepo{}
+	workerRepo := &mockWorkerRepo{}
+	auditRepo := &mockAuditRepo{}
+	monitorClient := &mockMonitorClientForScheduler{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, auditRepo, monitorClient, 2*time.Minute, logger)
+
+	monitorClient.On("IsMonitorPaused", mock.Anything, mock.Anything).Return(false, fmt.Errorf("not found"))
+
+	monitorID := uuid.New()
+	_, err := svc.TriggerScheduledCheck(ctx, monitorID, model.PriorityHigh)
+
+	assert.ErrorIs(t, err, model.ErrMonitorNotFound)
+}
+
+func TestReassignOverdueChecks_success(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	check := model.NewScheduledCheck(uuid.New(), model.PriorityNormal, time.Now().Add(-5*time.Minute))
+	checkRepo := &mockCheckRepo{}
+	worker := model.NewWorker("worker-01", "msk")
+	workerRepo := &mockWorkerRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, nil, nil, 2*time.Minute, logger)
+
+	checkRepo.On("ListOverdue", mock.Anything, mock.Anything).Return([]*model.ScheduledCheck{check}, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{worker}, nil)
+	checkRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+
+	count, err := svc.ReassignOverdueChecks(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestReassignOverdueChecks_no_workers(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	check := model.NewScheduledCheck(uuid.New(), model.PriorityNormal, time.Now().Add(-5*time.Minute))
+	checkRepo := &mockCheckRepo{}
+	workerRepo := &mockWorkerRepo{}
+	logger := slog.Default()
+	svc := NewCheckScheduler(checkRepo, workerRepo, nil, nil, 2*time.Minute, logger)
+
+	checkRepo.On("ListOverdue", mock.Anything, mock.Anything).Return([]*model.ScheduledCheck{check}, nil)
+	workerRepo.On("ListIdleByZone", mock.Anything, "").Return([]*model.Worker{}, nil)
+
+	count, err := svc.ReassignOverdueChecks(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+type mockMonitorClientForScheduler struct {
+	mock.Mock
+}
+
+func (m *mockMonitorClientForScheduler) GetMonitor(ctx context.Context, _ string) (*monitor.MonitorInfo, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*monitor.MonitorInfo), args.Error(1)
+}
+
+func (m *mockMonitorClientForScheduler) ListActiveMonitors(ctx context.Context, _ int) ([]*monitor.MonitorInfo, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]*monitor.MonitorInfo), args.Error(1)
+}
+
+func (m *mockMonitorClientForScheduler) IsMonitorPaused(ctx context.Context, _ string) (bool, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(bool), args.Error(1)
+}

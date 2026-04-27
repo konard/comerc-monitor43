@@ -1,0 +1,81 @@
+# Prometheus Configuration for Milan Monitoring Service
+# ========================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'milan-monitoring'
+    replica: '1'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rule files for alerting
+rule_files:
+  # - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Monitor Service
+  - job_name: 'monitor-service'
+    static_configs:
+      - targets: ['monitor-service:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Alert Service
+  - job_name: 'alert-service'
+    static_configs:
+      - targets: ['alert-service:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Billing Service
+  - job_name: 'billing-service'
+    static_configs:
+      - targets: ['billing-service:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Scheduler Service
+  - job_name: 'scheduler-service'
+    static_configs:
+      - targets: ['scheduler-service:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Check Worker
+  - job_name: 'check-worker'
+    static_configs:
+      - targets: ['check-worker:9095']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # PostgreSQL (using postgres_exporter if available)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #   scrape_interval: 30s
+
+  # RabbitMQ (using rabbitmq_exporter if available)
+  # - job_name: 'rabbitmq'
+  #   static_configs:
+  #     - targets: ['rabbitmq-exporter:9090']
+  #   scrape_interval: 30s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s

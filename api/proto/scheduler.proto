@@ -1,0 +1,205 @@
+// epic=09_scheduler, us=09_01_worker_management
+// Scheduler service for managing check scheduling and workers
+
+syntax = "proto3";
+
+package scheduler;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+// Scheduler service provides check scheduling management
+service SchedulerService {
+  // uc_09_01_01: Register a worker
+  rpc RegisterWorker(RegisterWorkerRequest) returns (Worker) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduler/workers"
+      body: "*"
+    };
+  }
+
+  // uc_09_01_02: Heartbeat from worker
+  rpc WorkerHeartbeat(HeartbeatRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduler/workers/{worker_id}/heartbeat"
+      body: "*"
+    };
+  }
+
+  // uc_09_01_03: Unregister a worker
+  rpc UnregisterWorker(UnregisterWorkerRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/scheduler/workers/{worker_id}"
+    };
+  }
+
+  // uc_09_01_04: Get worker status
+  rpc GetWorkerStatus(GetWorkerStatusRequest) returns (Worker) {
+    option (google.api.http) = {
+      get: "/api/v1/scheduler/workers/{worker_id}"
+    };
+  }
+
+  // uc_09_01_05: List all workers
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/scheduler/workers"
+    };
+  }
+
+  // uc_09_02_03: Get scheduled checks for a time window
+  rpc GetScheduledChecks(GetScheduledChecksRequest) returns (ScheduledChecks) {
+    option (google.api.http) = {
+      get: "/api/v1/scheduler/checks"
+    };
+  }
+
+  // uc_09_02_04: Get next check for a monitor
+  rpc GetNextCheck(GetNextCheckRequest) returns (ScheduledCheck) {
+    option (google.api.http) = {
+      get: "/api/v1/scheduler/monitors/{monitor_id}/next-check"
+    };
+  }
+
+  // uc_09_02_05: Manually trigger check
+  rpc TriggerScheduledCheck(TriggerScheduledCheckRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduler/monitors/{monitor_id}/trigger"
+      body: "*"
+    };
+  }
+
+  // uc_09_02_06: Complete a scheduled check
+  rpc CompleteCheck(CompleteCheckRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduler/checks/{check_id}/complete"
+      body: "*"
+    };
+  }
+
+  // uc_09_02_14: Handle overdue check reassignment
+  rpc ReassignOverdueChecks(ReassignOverdueChecksRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/scheduler/checks/reassign-overdue"
+      body: "*"
+    };
+  }
+}
+
+// Worker status enum
+enum WorkerStatus {
+  WORKER_STATUS_UNSPECIFIED = 0;
+  WORKER_STATUS_IDLE = 1;
+  WORKER_STATUS_BUSY = 2;
+  WORKER_STATUS_OFFLINE = 3;
+}
+
+// Check priority enum
+enum CheckPriority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_NORMAL = 2;
+  PRIORITY_HIGH = 3;
+  PRIORITY_CRITICAL = 4;
+}
+
+// Worker entity
+message Worker {
+  string id = 1;
+  string name = 2;
+  WorkerStatus status = 3;
+  string zone = 4;  // availability zone
+  google.protobuf.Timestamp last_heartbeat = 5;
+  int32 checks_completed = 6;
+  int32 checks_failed = 7;
+  double avg_check_duration_ms = 8;
+  map<string, string> metadata = 9;
+}
+
+// Scheduled check entity
+message ScheduledCheck {
+  string id = 1;
+  string monitor_id = 2;
+  string worker_id = 3;
+  CheckPriority priority = 4;
+  google.protobuf.Timestamp scheduled_at = 5;
+  google.protobuf.Timestamp executed_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  string status = 8;  // pending, in_progress, completed, failed
+  string error_message = 9;
+}
+
+// Request/Response messages
+
+message RegisterWorkerRequest {
+  string name = 1;
+  string zone = 2;
+  map<string, string> metadata = 3;
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  string status = 2;
+  int32 checks_completed = 3;
+  int32 checks_failed = 4;
+  double avg_check_duration_ms = 5;
+}
+
+message UnregisterWorkerRequest {
+  string worker_id = 1;
+}
+
+message GetWorkerStatusRequest {
+  string worker_id = 1;
+}
+
+message ListWorkersRequest {
+  string status = 2;  // optional filter
+  string zone = 3;  // optional filter
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetScheduledChecksRequest {
+  google.protobuf.Timestamp from_time = 1;
+  google.protobuf.Timestamp to_time = 2;
+  string status = 3;  // optional filter
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ScheduledChecks {
+  repeated ScheduledCheck checks = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetNextCheckRequest {
+  string monitor_id = 1;
+}
+
+message TriggerScheduledCheckRequest {
+  string monitor_id = 1;
+  int32 priority = 2;  // 0 = default, 1 = high priority
+}
+
+message CompleteCheckRequest {
+  string check_id = 1;
+  bool failed = 2;
+  string error_message = 3;
+}
+
+message ReassignOverdueChecksRequest {
+  google.protobuf.Timestamp threshold_time = 1;
+}

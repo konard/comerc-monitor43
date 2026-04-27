@@ -1,0 +1,171 @@
+// epic=08_maintenance, us=08_01_maintenance_windows
+// Maintenance window service for managing technical maintenance periods
+
+syntax = "proto3";
+
+package maintenance;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "proto/monitor.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/api/annotations.proto";
+
+// MaintenanceWindowService provides maintenance window management
+service MaintenanceWindowService {
+  // uc_08_01_01: Create a maintenance window
+  rpc CreateMaintenanceWindow(CreateMaintenanceWindowRequest) returns (MaintenanceWindow) {
+    option (google.api.http) = {
+      post: "/api/v1/maintenance/windows"
+      body: "*"
+    };
+  }
+
+  // uc_08_01_19: Update a maintenance window
+  rpc UpdateMaintenanceWindow(UpdateMaintenanceWindowRequest) returns (MaintenanceWindow) {
+    option (google.api.http) = {
+      put: "/api/v1/maintenance/windows/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_08_01_20: List maintenance windows
+  rpc ListMaintenanceWindows(ListMaintenanceWindowsRequest) returns (ListMaintenanceWindowsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/maintenance/windows"
+    };
+  }
+
+  // uc_08_01_24: Delete a maintenance window
+  rpc DeleteMaintenanceWindow(DeleteMaintenanceWindowRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/maintenance/windows/{id}"
+    };
+  }
+
+  // uc_08_01_25a: Cancel an active maintenance window
+  rpc CancelMaintenanceWindow(CancelMaintenanceWindowRequest) returns (MaintenanceWindow) {
+    option (google.api.http) = {
+      post: "/api/v1/maintenance/windows/{id}/cancel"
+      body: "*"
+    };
+  }
+
+  // uc_08_01_21: Get maintenance window history
+  rpc GetMaintenanceWindowHistory(GetMaintenanceWindowHistoryRequest) returns (GetMaintenanceWindowHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/maintenance/windows/history"
+    };
+  }
+}
+
+// MaintenanceWindowStatus represents the current status of a maintenance window
+enum MaintenanceWindowStatus {
+  MAINTENANCE_STATUS_UNSPECIFIED = 0;
+  MAINTENANCE_STATUS_SCHEDULED = 1;   // Window is scheduled for future
+  MAINTENANCE_STATUS_ACTIVE = 2;      // Window is currently active
+  MAINTENANCE_STATUS_COMPLETED = 3;   // Window has completed
+  MAINTENANCE_STATUS_CANCELLED = 4;   // Window was cancelled
+  MAINTENANCE_STATUS_ORPHANED = 5;    // Window was orphaned (monitors deleted)
+}
+
+// RecurrenceType defines how often the maintenance window repeats
+enum RecurrenceType {
+  RECURRENCE_TYPE_UNSPECIFIED = 0;
+  RECURRENCE_TYPE_ONCE = 1;       // One-time window
+  RECURRENCE_TYPE_DAILY = 2;      // Repeats daily
+  RECURRENCE_TYPE_WEEKLY = 3;     // Repeats weekly
+  RECURRENCE_TYPE_MONTHLY = 4;    // Repeats monthly
+}
+
+// MaintenanceWindow represents a maintenance period
+message MaintenanceWindow {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  google.protobuf.Timestamp start_time = 4;
+  google.protobuf.Timestamp end_time = 5;
+  MaintenanceWindowStatus status = 6;
+  RecurrenceType recurrence = 7;
+  bool is_global = 8;              // If true, applies to all monitors
+  bool pause_monitoring = 9;       // If true, pauses monitoring during window
+  bool suppress_alerts = 10;       // If true, suppresses alerts during window
+  bool safe_mode = 11;             // If true, allows safe checks during maintenance
+  repeated string monitor_ids = 12; // Specific monitors (empty if global)
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  google.protobuf.Timestamp activated_at = 15;  // When window became active
+  google.protobuf.Timestamp completed_at = 16;  // When window completed
+  int32 version = 17;              // For optimistic locking
+}
+
+// CreateMaintenanceWindowRequest creates a new maintenance window
+message CreateMaintenanceWindowRequest {
+  string name = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+  RecurrenceType recurrence = 4;
+  bool is_global = 5;
+  bool pause_monitoring = 6;
+  bool suppress_alerts = 7;
+  bool safe_mode = 8;
+  repeated string monitor_ids = 9;
+}
+
+// UpdateMaintenanceWindowRequest updates an existing maintenance window
+message UpdateMaintenanceWindowRequest {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int32 version = 5;  // For optimistic locking
+}
+
+// ListMaintenanceWindowsRequest lists maintenance windows
+message ListMaintenanceWindowsRequest {
+  string user_id = 1;
+  MaintenanceWindowStatus status = 2;  // Optional filter
+  google.protobuf.Timestamp start_date = 3;  // Optional filter start
+  google.protobuf.Timestamp end_date = 4;    // Optional filter end
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+// ListMaintenanceWindowsResponse returns maintenance windows
+message ListMaintenanceWindowsResponse {
+  repeated MaintenanceWindow windows = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// DeleteMaintenanceWindowRequest deletes a maintenance window
+message DeleteMaintenanceWindowRequest {
+  string id = 1;
+}
+
+// CancelMaintenanceWindowRequest cancels an active or scheduled maintenance window
+message CancelMaintenanceWindowRequest {
+  string id = 1;
+  string cancellation_reason = 2;  // Optional reason
+}
+
+// GetMaintenanceWindowHistoryRequest gets historical maintenance windows
+message GetMaintenanceWindowHistoryRequest {
+  string user_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+  repeated string monitor_ids = 4;  // Optional filter by monitors
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+// GetMaintenanceWindowHistoryResponse returns historical maintenance windows
+message GetMaintenanceWindowHistoryResponse {
+  repeated MaintenanceWindow windows = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

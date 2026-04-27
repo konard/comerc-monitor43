@@ -1,0 +1,152 @@
+// epic=01_monitoring, us=01_monitor_management
+// Monitor service for creating and managing monitors
+
+syntax = "proto3";
+
+package monitor;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// Monitor service provides monitor management
+service MonitorService {
+  // uc_01_01_01: Create a new monitor
+  rpc CreateMonitor(CreateMonitorRequest) returns (Monitor);
+
+  // uc_01_01_02: Get monitor details
+  rpc GetMonitor(GetMonitorRequest) returns (Monitor);
+
+  // uc_01_01_03: List all monitors
+  rpc ListMonitors(ListMonitorsRequest) returns (ListMonitorsResponse);
+
+  // uc_01_01_04: Update monitor
+  rpc UpdateMonitor(UpdateMonitorRequest) returns (Monitor);
+
+  // uc_01_01_05: Delete monitor
+  rpc DeleteMonitor(DeleteMonitorRequest) returns (common.Empty);
+
+  // uc_01_01_06: Pause monitor
+  rpc PauseMonitor(PauseMonitorRequest) returns (common.Empty);
+
+  // uc_01_01_07: Resume monitor
+  rpc ResumeMonitor(ResumeMonitorRequest) returns (common.Empty);
+
+  // uc_01_01_08: Trigger manual check
+  rpc TriggerCheck(TriggerCheckRequest) returns (CheckResult);
+}
+
+// Monitor status enum
+enum MonitorStatus {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_PENDING = 1;
+  STATUS_ACTIVE = 2;
+  STATUS_PAUSED = 3;
+  STATUS_ERROR = 4;
+  STATUS_DISABLED = 5;
+}
+
+// Monitor check type enum
+enum CheckType {
+  CHECK_TYPE_UNSPECIFIED = 0;
+  CHECK_TYPE_HTTP = 1;
+  CHECK_TYPE_PING = 2;
+  CHECK_TYPE_TCP = 3;
+  CHECK_TYPE_DNS = 4;
+}
+
+// Monitor entity
+message Monitor {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string url = 4;
+  CheckType check_type = 5;
+  int32 interval_seconds = 6;
+  google.protobuf.Duration timeout = 7;
+  string expected_status_code = 8;
+  string expected_body_pattern = 9;
+  bool ssl_verify = 10;
+  MonitorStatus status = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  google.protobuf.Timestamp last_checked_at = 14;
+  CheckResult last_check_result = 15;
+  int64 total_checks = 16;
+  int64 failed_checks = 17;
+  double uptime_percentage = 18;
+  map<string, string> headers = 19;
+}
+
+// Check result from a monitor check
+message CheckResult {
+  bool success = 1;
+  int32 status_code = 2;
+  double response_time_ms = 3;
+  string error_message = 4;
+  google.protobuf.Timestamp checked_at = 5;
+  bytes response_body = 6;
+  map<string, string> response_headers = 7;
+}
+
+// Request/Response messages
+
+message CreateMonitorRequest {
+  string name = 1;
+  string url = 2;
+  CheckType check_type = 3;
+  int32 interval_seconds = 4;
+  google.protobuf.Duration timeout = 5;
+  string expected_status_code = 6;
+  string expected_body_pattern = 7;
+  bool ssl_verify = 8;
+  map<string, string> headers = 9;
+}
+
+message GetMonitorRequest {
+  string id = 1;
+}
+
+message ListMonitorsRequest {
+  string user_id = 1;
+  string status = 2;  // optional filter
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListMonitorsResponse {
+  repeated Monitor monitors = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateMonitorRequest {
+  string id = 1;
+  string name = 2;
+  string url = 3;
+  int32 interval_seconds = 4;
+  google.protobuf.Duration timeout = 5;
+  string expected_status_code = 6;
+  string expected_body_pattern = 7;
+  bool ssl_verify = 8;
+  map<string, string> headers = 9;
+}
+
+message DeleteMonitorRequest {
+  string id = 1;
+}
+
+message PauseMonitorRequest {
+  string id = 1;
+}
+
+message ResumeMonitorRequest {
+  string id = 1;
+}
+
+message TriggerCheckRequest {
+  string id = 1;
+}

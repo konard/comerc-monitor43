@@ -1,0 +1,486 @@
+// epic=07_integrations, us=01_webhooks, us=02_api_access
+// Integration service for managing webhooks, API keys, and imports
+
+syntax = "proto3";
+
+package integration;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+// ============================================
+// Webhook Integration Service
+// ============================================
+service WebhookIntegrationService {
+  // uc_07_01_01: Create webhook integration
+  rpc CreateWebhook(CreateWebhookRequest) returns (WebhookIntegration) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/webhooks"
+      body: "*"
+    };
+  }
+
+  // uc_07_01_17: Get webhook by ID
+  rpc GetWebhook(GetWebhookRequest) returns (WebhookIntegration) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/webhooks/{id}"
+    };
+  }
+
+  // uc_07_01_12: List all webhooks for user
+  rpc ListWebhooks(ListWebhooksRequest) returns (ListWebhooksResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/webhooks"
+    };
+  }
+
+  // uc_07_01_14: Update webhook
+  rpc UpdateWebhook(UpdateWebhookRequest) returns (WebhookIntegration) {
+    option (google.api.http) = {
+      put: "/api/v1/integrations/webhooks/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_07_01_15: Delete webhook
+  rpc DeleteWebhook(DeleteWebhookRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/integrations/webhooks/{id}"
+    };
+  }
+
+  // Enable webhook
+  rpc EnableWebhook(EnableWebhookRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/webhooks/{id}:enable"
+      body: "*"
+    };
+  }
+
+  // Disable webhook
+  rpc DisableWebhook(DisableWebhookRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/webhooks/{id}:disable"
+      body: "*"
+    };
+  }
+
+  // uc_07_01_18: Test webhook endpoint
+  rpc TestWebhook(TestWebhookRequest) returns (TestWebhookResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/webhooks/{id}:test"
+      body: "*"
+    };
+  }
+
+  // uc_07_01_05: Clone webhook
+  rpc CloneWebhook(CloneWebhookRequest) returns (WebhookIntegration) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/webhooks/{id}:clone"
+      body: "*"
+    };
+  }
+
+  // uc_07_01_22: Get webhook statistics
+  rpc GetWebhookStats(GetWebhookStatsRequest) returns (WebhookStats) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/webhooks/{id}/stats"
+    };
+  }
+}
+
+// Webhook integration
+message WebhookIntegration {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string url = 4;
+  string method = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  string status = 8;
+  string priority = 9;
+  repeated string severity_filter = 10;
+  int32 max_payload_size_bytes = 11;
+  string payload_handling_strategy = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// Create webhook request
+message CreateWebhookRequest {
+  string user_id = 1;
+  string name = 2;
+  string url = 3;
+  string method = 4; // GET, POST, PUT, PATCH
+  map<string, string> headers = 5;
+  string secret_key = 6; // Optional HMAC secret
+  string priority = 7; // high, normal, low
+  repeated string severity_filter = 8;
+  int32 max_payload_size_bytes = 9;
+  string payload_handling_strategy = 10; // truncate, reject
+}
+
+// Get webhook request
+message GetWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// List webhooks request
+message ListWebhooksRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// List webhooks response
+message ListWebhooksResponse {
+  repeated WebhookIntegration webhooks = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// Update webhook request
+message UpdateWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+  string name = 3;
+  string url = 4;
+  string method = 5;
+  map<string, string> headers = 6;
+  bool enabled = 7;
+  string priority = 8;
+  repeated string severity_filter = 9;
+  int32 max_payload_size_bytes = 10;
+  string payload_handling_strategy = 11;
+}
+
+// Delete webhook request
+message DeleteWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Enable webhook request
+message EnableWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Disable webhook request
+message DisableWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Test webhook request
+message TestWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Test webhook response
+message TestWebhookResponse {
+  bool success = 1;
+  int32 status_code = 2;
+  int32 response_time_ms = 3;
+  string error_message = 4;
+}
+
+// Clone webhook request
+message CloneWebhookRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+  string new_name = 3;
+  string new_url = 4;
+}
+
+// Get webhook stats request
+message GetWebhookStatsRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Webhook statistics
+message WebhookStats {
+  int32 total_sent = 1;
+  int32 successful_sent = 2;
+  int32 failed_sent = 3;
+  int32 avg_response_time_ms = 4;
+  google.protobuf.Timestamp last_sent_at = 5;
+  google.protobuf.Timestamp last_success_at = 6;
+  google.protobuf.Timestamp last_failure_at = 7;
+  int32 failure_count = 8;
+  float success_rate = 9;
+}
+
+// ============================================
+// API Key Service
+// ============================================
+service APIKeyService {
+  // uc_07_02_01: Create API key
+  rpc CreateAPIKey(CreateAPIKeyRequest) returns (APIKey) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/api-keys"
+      body: "*"
+    };
+  }
+
+  // uc_07_02_12: Get API key by ID
+  rpc GetAPIKey(GetAPIKeyRequest) returns (APIKey) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/api-keys/{id}"
+    };
+  }
+
+  // List API keys
+  rpc ListAPIKeys(ListAPIKeysRequest) returns (ListAPIKeysResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/api-keys"
+    };
+  }
+
+  // uc_07_02_14: Update API key
+  rpc UpdateAPIKey(UpdateAPIKeyRequest) returns (APIKey) {
+    option (google.api.http) = {
+      put: "/api/v1/integrations/api-keys/{id}"
+      body: "*"
+    };
+  }
+
+  // uc_07_02_10: Delete (revoke) API key
+  rpc DeleteAPIKey(DeleteAPIKeyRequest) returns (common.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/integrations/api-keys/{id}"
+    };
+  }
+
+  // uc_07_02_16: Rotate API key secret
+  rpc RotateAPIKeySecret(RotateAPIKeySecretRequest) returns (APIKey) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/api-keys/{id}:rotate"
+      body: "*"
+    };
+  }
+
+  // uc_07_02_26: Get API key statistics
+  rpc GetAPIKeyStats(GetAPIKeyStatsRequest) returns (APIKeyStats) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/api-keys/{id}/stats"
+    };
+  }
+
+  // Validate API key (used by Gateway)
+  rpc ValidateAPIKey(ValidateAPIKeyRequest) returns (ValidateAPIKeyResponse);
+}
+
+// API key
+message APIKey {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string description = 4;
+  string key_prefix = 5; // Only prefix, NOT full key!
+  repeated string scopes = 6;
+  string status = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  repeated string ip_whitelist = 9;
+  int32 rate_limit_per_minute = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  google.protobuf.Timestamp last_rotated_at = 13;
+}
+
+// Create API key request
+message CreateAPIKeyRequest {
+  string user_id = 1;
+  string name = 2;
+  string description = 3;
+  string key_type = 4; // read_only, read_write, admin
+  repeated string scopes = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  repeated string ip_whitelist = 7;
+  int32 rate_limit_per_minute = 8;
+}
+
+// Create API key response (includes full key - returned only once!)
+message CreateAPIKeyResponse {
+  APIKey api_key = 1;
+  string full_key = 2; // Full API key - returned ONLY on creation!
+}
+
+// Get API key request
+message GetAPIKeyRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// List API keys request
+message ListAPIKeysRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// List API keys response
+message ListAPIKeysResponse {
+  repeated APIKey api_keys = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// Update API key request
+message UpdateAPIKeyRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+  string name = 3;
+  string description = 4;
+  bool enabled = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  repeated string ip_whitelist = 7;
+  int32 rate_limit_per_minute = 8;
+}
+
+// Delete API key request
+message DeleteAPIKeyRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Rotate API key secret request
+message RotateAPIKeySecretRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Rotate API key secret response (includes new full key)
+message RotateAPIKeySecretResponse {
+  APIKey api_key = 1;
+  string new_full_key = 2; // New full key - returned ONLY on rotation!
+}
+
+// Get API key stats request
+message GetAPIKeyStatsRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// API key statistics
+message APIKeyStats {
+  int64 total_requests = 1;
+  int64 successful_requests = 2;
+  int64 failed_requests = 3;
+  float success_rate = 4;
+  int32 avg_latency_ms = 5;
+  google.protobuf.Timestamp last_used_at = 6;
+  string last_used_ip = 7;
+  string most_used_endpoint = 8;
+}
+
+// Validate API key request (used by Gateway)
+message ValidateAPIKeyRequest {
+  string api_key = 1; // Full API key from Authorization header
+  string endpoint = 2;
+  string method = 3;
+  string ip_address = 4;
+}
+
+// Validate API key response
+message ValidateAPIKeyResponse {
+  bool valid = 1;
+  string user_id = 2;
+  repeated string scopes = 3;
+  string status = 4;
+  string error_code = 5;
+  string error_message = 6;
+}
+
+// ============================================
+// Import Service
+// ============================================
+service ImportService {
+  // uc_07_02_20: Import monitors from file
+  rpc ImportMonitors(ImportMonitorsRequest) returns (ImportHistory) {
+    option (google.api.http) = {
+      post: "/api/v1/integrations/imports"
+      body: "*"
+    };
+  }
+
+  // uc_07_02_25: Get import history by ID
+  rpc GetImportHistory(GetImportHistoryRequest) returns (ImportHistory) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/imports/{id}"
+    };
+  }
+
+  // List import history
+  rpc ListImportHistory(ListImportHistoryRequest) returns (ListImportHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/integrations/imports"
+    };
+  }
+}
+
+// Import history
+message ImportHistory {
+  string id = 1;
+  string user_id = 2;
+  string source = 3; // uptimerobot, pingdom, csv, json
+  string status = 4; // pending, running, completed, failed, partial
+  int32 total_monitors = 5;
+  int32 successful_imports = 6;
+  int32 failed_imports = 7;
+  int32 skipped_imports = 8;
+  bool overwrite_existing = 9;
+  repeated string imported_monitor_ids = 10;
+  repeated ValidationError validation_errors = 11;
+  string file_name = 12;
+  int32 file_size_bytes = 13;
+  google.protobuf.Timestamp started_at = 14;
+  google.protobuf.Timestamp completed_at = 15;
+  int32 duration_ms = 16;
+  string error_message = 17;
+}
+
+// Validation error
+message ValidationError {
+  int32 row = 1;
+  string field = 2;
+  string message = 3;
+  string value = 4;
+}
+
+// Import monitors request
+message ImportMonitorsRequest {
+  string user_id = 1;
+  string source = 2; // uptimerobot, pingdom, csv, json
+  bytes file_data = 3;
+  string file_name = 4;
+  bool overwrite_existing = 5;
+}
+
+// Get import history request
+message GetImportHistoryRequest {
+  string id = 1;
+  string user_id = 2; // For authorization
+}
+
+// List import history request
+message ListImportHistoryRequest {
+  string user_id = 1;
+  string source = 2; // Optional filter by source
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+// List import history response
+message ListImportHistoryResponse {
+  repeated ImportHistory imports = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}

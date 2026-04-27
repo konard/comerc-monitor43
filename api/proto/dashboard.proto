@@ -1,0 +1,245 @@
+// epic=03_dashboard, us=03_dashboard
+// Dashboard service for status aggregation, history and real-time updates
+
+syntax = "proto3";
+
+package dashboard;
+
+option go_package = "github.com/raul/monitor/api";
+
+import "proto/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+// Dashboard service provides dashboard views, history and real-time updates
+service DashboardService {
+  // === Status View (03_01) ===
+
+  // uc_03_01_05: Get dashboard with monitor statuses
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/dashboard"
+    };
+  }
+
+  // uc_03_01_17d: Export dashboard data
+  rpc ExportDashboard(ExportDashboardRequest) returns (ExportResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/dashboard/export"
+      body: "*"
+    };
+  }
+
+  // === Monitor History (03_02) ===
+
+  // uc_03_02_01: Get check history for a monitor
+  rpc GetCheckHistory(GetCheckHistoryRequest) returns (GetCheckHistoryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/history"
+    };
+  }
+
+  // uc_03_02_06: Get incidents for a monitor
+  rpc GetIncidents(GetIncidentsRequest) returns (GetIncidentsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/incidents"
+    };
+  }
+
+  // uc_03_02_07: Get incident details
+  rpc GetIncidentDetails(GetIncidentDetailsRequest) returns (IncidentDetail) {
+    option (google.api.http) = {
+      get: "/api/v1/incidents/{id}"
+    };
+  }
+
+  // uc_03_02_10: Get period metrics
+  rpc GetPeriodMetrics(GetPeriodMetricsRequest) returns (PeriodMetrics) {
+    option (google.api.http) = {
+      get: "/api/v1/monitors/{monitor_id}/metrics"
+    };
+  }
+
+  // uc_03_02_09: Export history
+  rpc ExportHistory(ExportHistoryRequest) returns (ExportResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/monitors/{monitor_id}/history/export"
+      body: "*"
+    };
+  }
+}
+
+// Dashboard monitor status (health check status)
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_UP = 1;
+  HEALTH_STATUS_DOWN = 2;
+  HEALTH_STATUS_DEGRADED = 3;
+  HEALTH_STATUS_PAUSED = 4;
+}
+
+// Incident status
+enum IncidentStatus {
+  INCIDENT_STATUS_UNSPECIFIED = 0;
+  INCIDENT_STATUS_ACTIVE = 1;
+  INCIDENT_STATUS_RESOLVED = 2;
+}
+
+// Sort order
+enum SortOrder {
+  SORT_ORDER_UNSPECIFIED = 0;
+  SORT_ORDER_ASC = 1;
+  SORT_ORDER_DESC = 2;
+}
+
+// Monitor status view for dashboard
+message MonitorStatusView {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string url = 4;
+  HealthStatus status = 5;
+  double uptime_percentage = 6;
+  google.protobuf.Timestamp last_checked_at = 7;
+  double last_response_time_ms = 8;
+  repeated string tags = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+// Check history entry
+message CheckHistoryEntry {
+  string id = 1;
+  string monitor_id = 2;
+  HealthStatus status = 3;
+  int32 status_code = 4;
+  double response_time_ms = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp checked_at = 7;
+}
+
+// Incident
+message Incident {
+  string id = 1;
+  string monitor_id = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp ended_at = 4;
+  int64 duration_seconds = 5;
+  int32 check_count = 6;
+  IncidentStatus status = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Incident detail with timeline
+message IncidentDetail {
+  Incident incident = 1;
+  repeated CheckHistoryEntry timeline = 2;
+}
+
+// Period metrics
+message PeriodMetrics {
+  int64 total_checks = 1;
+  int64 success_count = 2;
+  int64 failed_count = 3;
+  int64 degraded_count = 4;
+  double uptime_percentage = 5;
+  double p50_response_time_ms = 6;
+  double p95_response_time_ms = 7;
+  double p99_response_time_ms = 8;
+}
+
+// Dashboard filter
+message DashboardFilter {
+  repeated HealthStatus statuses = 1;
+  repeated string tags = 2;
+  string search = 3;
+  string sort_by = 4;
+  SortOrder sort_order = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+// Request/Response messages
+
+message GetDashboardRequest {
+  repeated HealthStatus statuses = 1;
+  repeated string tags = 2;
+  string search = 3;
+  string sort_by = 4;
+  SortOrder sort_order = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message GetDashboardResponse {
+  repeated MonitorStatusView monitors = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  double overall_uptime_percentage = 5;
+}
+
+message ExportDashboardRequest {
+  repeated HealthStatus statuses = 1;
+  repeated string tags = 2;
+  string format = 3;
+}
+
+message GetCheckHistoryRequest {
+  string monitor_id = 1;
+  HealthStatus status = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+  string sort_by = 5;
+  SortOrder sort_order = 6;
+  int32 page = 7;
+  int32 page_size = 8;
+}
+
+message GetCheckHistoryResponse {
+  repeated CheckHistoryEntry checks = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetIncidentsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message GetIncidentsResponse {
+  repeated Incident incidents = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetIncidentDetailsRequest {
+  string id = 1;
+}
+
+message GetPeriodMetricsRequest {
+  string monitor_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+}
+
+message ExportHistoryRequest {
+  string monitor_id = 1;
+  HealthStatus status = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+  string format = 5;
+  repeated string fields = 6;
+}
+
+message ExportResponse {
+  string download_url = 1;
+  string format = 2;
+  int64 expires_at_unix = 3;
+}

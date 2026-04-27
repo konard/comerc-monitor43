@@ -1,0 +1,655 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/scheduler.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "SchedulerService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/scheduler/checks": {
+      "get": {
+        "summary": "uc_09_02_03: Get scheduled checks for a time window",
+        "operationId": "SchedulerService_GetScheduledChecks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/schedulerScheduledChecks"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from_time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to_time",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "status",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/checks/reassign-overdue": {
+      "post": {
+        "summary": "uc_09_02_14: Handle overdue check reassignment",
+        "operationId": "SchedulerService_ReassignOverdueChecks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/schedulerReassignOverdueChecksRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/checks/{check_id}/complete": {
+      "post": {
+        "summary": "uc_09_02_06: Complete a scheduled check",
+        "operationId": "SchedulerService_CompleteCheck",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "check_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchedulerServiceCompleteCheckBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/monitors/{monitor_id}/next-check": {
+      "get": {
+        "summary": "uc_09_02_04: Get next check for a monitor",
+        "operationId": "SchedulerService_GetNextCheck",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/schedulerScheduledCheck"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/monitors/{monitor_id}/trigger": {
+      "post": {
+        "summary": "uc_09_02_05: Manually trigger check",
+        "operationId": "SchedulerService_TriggerScheduledCheck",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchedulerServiceTriggerScheduledCheckBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/workers": {
+      "get": {
+        "summary": "uc_09_01_05: List all workers",
+        "operationId": "SchedulerService_ListWorkers",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/schedulerListWorkersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "zone",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      },
+      "post": {
+        "summary": "uc_09_01_01: Register a worker",
+        "operationId": "SchedulerService_RegisterWorker",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/schedulerWorker"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/schedulerRegisterWorkerRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/workers/{worker_id}": {
+      "get": {
+        "summary": "uc_09_01_04: Get worker status",
+        "operationId": "SchedulerService_GetWorkerStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/schedulerWorker"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      },
+      "delete": {
+        "summary": "uc_09_01_03: Unregister a worker",
+        "operationId": "SchedulerService_UnregisterWorker",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    },
+    "/api/v1/scheduler/workers/{worker_id}/heartbeat": {
+      "post": {
+        "summary": "uc_09_01_02: Heartbeat from worker",
+        "operationId": "SchedulerService_WorkerHeartbeat",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchedulerServiceWorkerHeartbeatBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchedulerService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "SchedulerServiceCompleteCheckBody": {
+      "type": "object",
+      "properties": {
+        "failed": {
+          "type": "boolean"
+        },
+        "error_message": {
+          "type": "string"
+        }
+      }
+    },
+    "SchedulerServiceTriggerScheduledCheckBody": {
+      "type": "object",
+      "properties": {
+        "priority": {
+          "type": "integer",
+          "format": "int32",
+          "title": "0 = default, 1 = high priority"
+        }
+      }
+    },
+    "SchedulerServiceWorkerHeartbeatBody": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "checks_completed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "checks_failed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "avg_check_duration_ms": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "commonEmpty": {
+      "type": "object",
+      "title": "Empty request"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "schedulerCheckPriority": {
+      "type": "string",
+      "enum": [
+        "PRIORITY_UNSPECIFIED",
+        "PRIORITY_LOW",
+        "PRIORITY_NORMAL",
+        "PRIORITY_HIGH",
+        "PRIORITY_CRITICAL"
+      ],
+      "default": "PRIORITY_UNSPECIFIED",
+      "title": "Check priority enum"
+    },
+    "schedulerListWorkersResponse": {
+      "type": "object",
+      "properties": {
+        "workers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/schedulerWorker"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "schedulerReassignOverdueChecksRequest": {
+      "type": "object",
+      "properties": {
+        "threshold_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "schedulerRegisterWorkerRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "zone": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "schedulerScheduledCheck": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monitor_id": {
+          "type": "string"
+        },
+        "worker_id": {
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/definitions/schedulerCheckPriority"
+        },
+        "scheduled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "executed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "title": "pending, in_progress, completed, failed"
+        },
+        "error_message": {
+          "type": "string"
+        }
+      },
+      "title": "Scheduled check entity"
+    },
+    "schedulerScheduledChecks": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/schedulerScheduledCheck"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "schedulerWorker": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/schedulerWorkerStatus"
+        },
+        "zone": {
+          "type": "string",
+          "title": "availability zone"
+        },
+        "last_heartbeat": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "checks_completed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "checks_failed": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "avg_check_duration_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Worker entity"
+    },
+    "schedulerWorkerStatus": {
+      "type": "string",
+      "enum": [
+        "WORKER_STATUS_UNSPECIFIED",
+        "WORKER_STATUS_IDLE",
+        "WORKER_STATUS_BUSY",
+        "WORKER_STATUS_OFFLINE"
+      ],
+      "default": "WORKER_STATUS_UNSPECIFIED",
+      "title": "Worker status enum"
+    }
+  }
+}

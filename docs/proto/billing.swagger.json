@@ -1,0 +1,528 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "proto/billing.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "BillingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/billing/checkout": {
+      "post": {
+        "summary": "uc_04_01_03: Create subscription checkout",
+        "operationId": "BillingService_CreateCheckout",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/billingCheckoutResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/billingCreateCheckoutRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BillingService"
+        ]
+      }
+    },
+    "/api/v1/billing/payments/{user_id}": {
+      "get": {
+        "summary": "uc_04_01_04: Get payment history",
+        "operationId": "BillingService_GetPaymentHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/billingPaymentHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "BillingService"
+        ]
+      }
+    },
+    "/api/v1/billing/plans": {
+      "get": {
+        "summary": "uc_04_01_01: Get available subscription plans",
+        "operationId": "BillingService_GetSubscriptionPlans",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/billingSubscriptionPlans"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "BillingService"
+        ]
+      }
+    },
+    "/api/v1/billing/subscriptions/{user_id}": {
+      "get": {
+        "summary": "uc_04_01_02: Get current user subscription",
+        "operationId": "BillingService_GetSubscription",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/billingSubscription"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BillingService"
+        ]
+      }
+    },
+    "/api/v1/billing/subscriptions/{user_id}/cancel": {
+      "post": {
+        "summary": "uc_04_01_05: Cancel subscription",
+        "operationId": "BillingService_CancelSubscription",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BillingServiceCancelSubscriptionBody"
+            }
+          }
+        ],
+        "tags": [
+          "BillingService"
+        ]
+      }
+    },
+    "/api/v1/billing/webhooks/{provider}": {
+      "post": {
+        "summary": "uc_04_01_06: Handle webhook from payment provider",
+        "operationId": "BillingService_HandleWebhook",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonEmpty"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BillingServiceHandleWebhookBody"
+            }
+          }
+        ],
+        "tags": [
+          "BillingService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "BillingServiceCancelSubscriptionBody": {
+      "type": "object",
+      "properties": {
+        "cancel_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "BillingServiceHandleWebhookBody": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
+    "billingCheckoutResponse": {
+      "type": "object",
+      "properties": {
+        "checkout_url": {
+          "type": "string"
+        },
+        "payment_id": {
+          "type": "string"
+        }
+      }
+    },
+    "billingCreateCheckoutRequest": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "return_url": {
+          "type": "string"
+        }
+      }
+    },
+    "billingFeature": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "title": "Feature included in plan"
+    },
+    "billingPayment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "subscription_id": {
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/definitions/billingPaymentProvider"
+        },
+        "provider_payment_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/billingPaymentStatus"
+        },
+        "amount_kopeks": {
+          "type": "string",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Payment entity"
+    },
+    "billingPaymentHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/billingPayment"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "billingPaymentProvider": {
+      "type": "string",
+      "enum": [
+        "PROVIDER_UNSPECIFIED",
+        "PROVIDER_YOOKASSA",
+        "PROVIDER_STRIPE"
+      ],
+      "default": "PROVIDER_UNSPECIFIED",
+      "title": "Payment provider enum"
+    },
+    "billingPaymentStatus": {
+      "type": "string",
+      "enum": [
+        "PAYMENT_STATUS_UNSPECIFIED",
+        "PAYMENT_STATUS_PENDING",
+        "PAYMENT_STATUS_SUCCESS",
+        "PAYMENT_STATUS_FAILED",
+        "PAYMENT_STATUS_REFUNDED"
+      ],
+      "default": "PAYMENT_STATUS_UNSPECIFIED",
+      "title": "Payment status enum"
+    },
+    "billingSubscription": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/definitions/billingSubscriptionTier"
+        },
+        "status": {
+          "$ref": "#/definitions/billingSubscriptionStatus"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "canceled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "auto_renew": {
+          "type": "boolean"
+        }
+      },
+      "title": "Subscription entity"
+    },
+    "billingSubscriptionPlan": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/definitions/billingSubscriptionTier"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "price_kopeks": {
+          "type": "string",
+          "format": "int64",
+          "title": "price in Russian kopeks (100 kopeks = 1 ruble)"
+        },
+        "billing_period_days": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "max_monitors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "min_check_interval_seconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/billingFeature"
+          }
+        }
+      },
+      "title": "Subscription plan"
+    },
+    "billingSubscriptionPlans": {
+      "type": "object",
+      "properties": {
+        "plans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/billingSubscriptionPlan"
+          }
+        }
+      }
+    },
+    "billingSubscriptionStatus": {
+      "type": "string",
+      "enum": [
+        "STATUS_UNSPECIFIED",
+        "STATUS_ACTIVE",
+        "STATUS_PENDING",
+        "STATUS_CANCELED",
+        "STATUS_EXPIRED"
+      ],
+      "default": "STATUS_UNSPECIFIED",
+      "title": "Subscription status enum"
+    },
+    "billingSubscriptionTier": {
+      "type": "string",
+      "enum": [
+        "TIER_UNSPECIFIED",
+        "TIER_FREE",
+        "TIER_STARTER",
+        "TIER_PROFESSIONAL",
+        "TIER_BUSINESS"
+      ],
+      "default": "TIER_UNSPECIFIED",
+      "title": "Subscription tier enum"
+    },
+    "commonEmpty": {
+      "type": "object",
+      "title": "Empty request"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+version: "3"
+
+tasks:
+  default:
+    # Эта задача выполняется по умолчанию при вызове 'task' без аргументов.
+    # Она скрыта из списка, так как у нее нет 'desc'.
+    cmds:
+      - task --list
+      - echo "task <name> --summary"
+    silent: true
+
+  sync:
+    desc: "Sync go.mod and go work"
+    cmds:
+      - ./scripts/eval-all.sh "go mod download && go mod tidy"
+      - go work sync
+
+  mock:
+    desc: "Regenerate mocks"
+    cmd: ./scripts/eval-all.sh "go run github.com/vektra/mockery/v3@latest"
+
+  lint:
+    desc: "Run linters"
+    cmds:
+      - |
+        ROOT="$(pwd)"
+        ./scripts/eval-all.sh "bash '$ROOT/scripts/lint.sh'"
+
+  test:
+    desc: "Run tests"
+    cmd: ./scripts/eval-all.sh "go test -p 8 -race -failfast ./..."
+
+  bdd:
+    desc: "Run BDD scenarios"
+    cmds:
+      - |
+        ./scripts/eval.sh "go test -timeout 20m -p 1 -v -failfast -tags bdd ./features/..."
+
+  bdd-pending:
+    desc: "Show pending and undefined BDD steps"
+    env:
+      BDD_GODOG_FORMAT: events
+    cmds:
+      - |
+        go test -timeout 20m -p 1 -v -tags bdd ./features/... 2>&1 | jq -Rr \
+          'fromjson? | select(.event == "TestStepFinished" and (.status == "pending" or .status == "undefined")) | [.status, .location] | @tsv'
+
+  bdd-inventory:
+    desc: "Group pending and undefined BDD steps by epic"
+    vars:
+      OUT: "{{.OUT | default \"out.txt\"}}"
+    cmd: go run ./scripts/bdd_inventory.go "{{.OUT}}"
+    silent: true
+
+  test-clean:
+    desc: "Clean testcache"
+    cmd: go clean -testcache

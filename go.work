@@ -1,0 +1,18 @@
+go 1.26.1
+
+use (
+	./
+	./api
+	./api/proto
+	./backend/alert-service
+	./backend/auth-service
+	./backend/billing-service
+	./backend/check-worker
+	./backend/dashboard-service
+	./backend/gateway
+	./backend/integration-service
+	./backend/monitor-service
+	./backend/notification-template-service
+	./backend/reporting-service
+	./backend/scheduler-service
+)

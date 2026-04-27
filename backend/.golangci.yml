@@ -1,0 +1,83 @@
+version: "2"
+
+# golangci-lint configuration for backend services
+# Based on DOD 10.2 requirements
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - gosec
+    - errcheck
+    - misspell
+    - gocritic
+    - revive
+    - noctx
+    - prealloc
+    - unused
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+
+    gosec:
+      excludes:
+        - G104
+        - G115
+        - G118
+
+    revive:
+      enable-all-rules: false
+      rules:
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        - unnamedResult
+
+  exclusions:
+    rules:
+      - path: ".*_test\\.go"
+        linters:
+          - errcheck
+          - gosec
+          - noctx
+          - dupl
+          - gocritic
+      - path: "features/steps/.*\\.go"
+        linters:
+          - errcheck
+          - gosec
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

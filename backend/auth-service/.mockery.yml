@@ -1,0 +1,17 @@
+filename: "{{.InterfaceName | snakecase}}.go"
+dir: "{{.InterfaceDir}}/mocks"
+structname: "{{.InterfaceName | firstUpper}}"
+pkgname: mocks
+template: testify
+template-data:
+  unroll-variadic: true
+packages:
+  github.com/raul/monitor/backend/auth-service/internal/service:
+    config:
+      all: true
+  github.com/raul/monitor/backend/auth-service/internal/handler:
+    config:
+      all: true
+  github.com/raul/monitor/backend/auth-service/internal/rabbitmq:
+    config:
+      all: true

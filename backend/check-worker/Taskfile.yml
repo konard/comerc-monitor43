@@ -1,0 +1,44 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  mod:
+    desc: "Sync go.mod"
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  lint:
+    desc: "Run linters"
+    cmds:
+      - golangci-lint run
+    silent: true
+
+  test:
+    desc: "Run all tests"
+    cmds:
+      - go test -race -failfast -count=1 ./...
+
+  test-v:
+    desc: "Run all tests with verbose output"
+    cmds:
+      - go test -v -race -failfast -count=1 ./...
+
+  test-short:
+    desc: "Run short tests"
+    cmds:
+      - go test -v -race -short -failfast -count=1 ./...
+
+  build:
+    desc: "Build the service"
+    cmds:
+      - go build -o bin/check-worker cmd/check-worker/main.go
+
+  run:
+    desc: "Run the service"
+    cmds:
+      - go run cmd/check-worker/main.go

@@ -1,0 +1,488 @@
+# Backend-сервисы Milan Monitoring System. Подключается корневым compose-файлом
+# через `include` — оттуда же приходит инфраструктура (Postgres, Redis, RabbitMQ,
+# Jaeger, Prometheus, Grafana) и общая network `monitor-network`. Это позволяет
+# ссылаться на инфру через `depends_on: condition: service_healthy`.
+#
+# Запуск всего стека из корня репозитория:
+#   docker compose up -d
+#
+# С observability (jaeger/prometheus/grafana):
+#   docker compose --profile observability up -d
+
+services:
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: backend/gateway/Dockerfile
+    container_name: monitor-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: "8080"
+      # Auth (gRPC only — сервис не имеет HTTP API)
+      AUTH_SERVICE_ADDR: "auth-service:5001"
+      AUTH_GRPC_ADDR: "auth-service:5001"
+      # HTTP адреса downstream-сервисов для REST-прокси
+      MONITOR_SERVICE_ADDR: "http://monitor-service:8080"
+      ALERT_SERVICE_ADDR: "http://alert-service:50051"
+      BILLING_SERVICE_ADDR: "http://billing-service:8082"
+      SCHEDULER_SERVICE_ADDR: "http://scheduler-service:8084"
+      DASHBOARD_SERVICE_ADDR: "http://dashboard-service:8095"
+      REPORTING_SERVICE_ADDR: "http://reporting-service:8084"
+      MAINTENANCE_SERVICE_ADDR: "http://monitor-service:8080"
+      DASHBOARD_WS_ADDR: "http://dashboard-service:8095"
+      # gRPC адреса downstream-сервисов
+      MONITOR_GRPC_ADDR: "monitor-service:9090"
+      ALERT_GRPC_ADDR: "alert-service:50051"
+      BILLING_GRPC_ADDR: "billing-service:5003"
+      SCHEDULER_GRPC_ADDR: "scheduler-service:9094"
+      DASHBOARD_GRPC_ADDR: "dashboard-service:9095"
+      REPORTING_GRPC_ADDR: "reporting-service:5007"
+      MAINTENANCE_GRPC_ADDR: "monitor-service:9090"
+      TEMPLATES_GRPC_ADDR: "notification-template-service:50051"
+      INTEGRATIONS_GRPC_ADDR: "integration-service:5014"
+      LOG_LEVEL: "info"
+      ENABLE_TRACING: "true"
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8080/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      monitor-service:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  auth-service:
+    build:
+      context: ..
+      dockerfile: backend/auth-service/Dockerfile
+    container_name: monitor-auth-service
+    environment:
+      SERVER_PORT: 8080
+      SERVER_GRPC_PORT: 5001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: monitor
+      DB_USER: monitor
+      DB_PASSWORD: monitor_p
+      DB_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      RABBITMQ_ENABLED: "false"
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      JWT_ACCESS_DURATION: 15m
+      JWT_REFRESH_DURATION: 168h
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/auth/google/callback}
+      MAX_LOGIN_ATTEMPTS: 10
+      ACCOUNT_LOCK_DURATION: 1h
+      SESSION_EXPIRY: 24h
+      METRICS_ENABLED: "false"
+      METRICS_PORT: 9090
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: auth-service
+      OTEL_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  monitor-service:
+    build:
+      context: ..
+      dockerfile: backend/monitor-service/Dockerfile
+    container_name: monitor-monitor-service
+    environment:
+      SERVER_PORT: 8080
+      SERVER_GRPC_PORT: 9090
+      SERVER_HOST: 0.0.0.0
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: monitor
+      DB_USER: monitor
+      DB_PASSWORD: monitor_p
+      DB_SSL_MODE: disable
+      DB_MAX_OPEN_CONNS: 25
+      DB_MAX_IDLE_CONNS: 5
+      DB_CONN_MAX_LIFETIME: 5m
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_VHOST: /
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_EXCHANGE: monitors
+      RABBITMQ_QUEUE: alerts.queue
+      RABBITMQ_DLQ: alerts.dlq
+      RABBITMQ_PREFETCH_COUNT: 10
+      RABBITMQ_RECONNECT_DELAY: 5s
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      JWT_ACCESS_DURATION: 15m
+      JWT_REFRESH_DURATION: 168h
+      JWT_ISSUER: monitor-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: monitor-service
+      OTEL_LOG_LEVEL: debug
+      OTEL_TRACES_SAMPLER: "1.0"
+      CHECK_EXECUTOR_TIMEOUT: 30s
+      CHECK_EXECUTOR_MAX_CONCURRENT: 100
+      CHECK_EXECUTOR_RETRY_COUNT: 3
+      CHECK_EXECUTOR_RETRY_DELAY: 1s
+      SCHEDULER_ENABLED: "true"
+      SCHEDULER_CHECK_INTERVAL: 30s
+      SCHEDULER_BATCH_SIZE: 100
+      SCHEDULER_MAX_CONCURRENT_CHECKS: 50
+      MAINTENANCE_MIN_DURATION_MINUTES: 1
+      MAINTENANCE_MAX_DURATION_HOURS: 24
+      MAINTENANCE_MAX_WINDOWS_FREE_TIER: 5
+      MAINTENANCE_MAX_WINDOWS_PRO_TIER: 20
+      MAINTENANCE_MAX_WINDOWS_ENTERPRISE: 100
+      MAINTENANCE_MAX_MONITORS_PER_WINDOW: 50
+      LOG_LEVEL: debug
+      LOG_FORMAT: json
+      LOG_OUTPUT: stdout
+      FEATURE_MAINTENANCE_WINDOWS: "true"
+      FEATURE_INCIDENTS: "true"
+      FEATURE_SCHEDULER: "true"
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: "1000"
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  alert-service:
+    build:
+      context: ..
+      dockerfile: backend/alert-service/Dockerfile
+    container_name: monitor-alert-service
+    environment:
+      SERVER_PORT: 50051
+      SERVER_HOST: 0.0.0.0
+      METRICS_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: monitor
+      DB_USER: monitor
+      DB_PASSWORD: monitor_p
+      DB_SSL_MODE: disable
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@monitor.example.com}
+      WEBHOOK_TIMEOUT: 30s
+      DELIVERY_MAX_RETRIES: 3
+      DELIVERY_RETRY_INTERVAL: 5m
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: alert-service
+      OTEL_LOG_LEVEL: debug
+    healthcheck:
+      # alert-service не имеет HTTP /health; используем gRPC health probe
+      test: [ "CMD", "grpc_health_probe", "-addr=localhost:50051" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  billing-service:
+    build:
+      context: ..
+      dockerfile: backend/billing-service/Dockerfile
+    container_name: monitor-billing-service
+    environment:
+      LOG_LEVEL: info
+      SERVER_PORT: 8082
+      SERVER_GRPC_PORT: 5003
+      SERVER_TIMEOUT: 30s
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: billing
+      DB_USER: billing
+      DB_PASSWORD: billing_secret
+      DB_SSL_MODE: disable
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_VHOST: /
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-placeholder}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-placeholder-yookassa-secret-key-dev}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-http://localhost:8080/billing/return}
+      YANDEX_SHOP_ID: ${YANDEX_SHOP_ID:-placeholder}
+      YANDEX_SECRET_KEY: ${YANDEX_SECRET_KEY:-placeholder-yandex-secret-key-for-dev}
+      YANDEX_WEBHOOK_SECRET: ${YANDEX_WEBHOOK_SECRET:-placeholder-webhook}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-placeholder-stripe-api-key-for-dev-mode}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-placeholder-webhook}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: billing-service
+      OTEL_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8082/health/liveness" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  scheduler-service:
+    build:
+      context: ..
+      dockerfile: backend/scheduler-service/Dockerfile
+    container_name: monitor-scheduler-service
+    environment:
+      SERVER_PORT: 8084
+      SERVER_GRPC_PORT: 9094
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: monitor
+      DB_USER: scheduler
+      DB_PASSWORD: scheduler
+      DB_SSL_MODE: disable
+      MONITOR_SERVICE_GRPC_ADDRESS: monitor-service:9090
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      HEARTBEAT_TIMEOUT: 30s
+      OFFLINE_CLEANUP_INTERVAL: 10m
+      OVERDUE_CHECK_THRESHOLD: 5m
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: scheduler-service
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8084/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  dashboard-service:
+    build:
+      context: ..
+      dockerfile: backend/dashboard-service/Dockerfile
+    container_name: monitor-dashboard-service
+    ports:
+      - "9095:9095" # gRPC
+      - "8095:8095" # HTTP
+    environment:
+      SERVER_PORT: 9095
+      HTTP_PORT: 8095
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-dashboard}
+      DB_USER: ${DB_USER:-monitor}
+      DB_PASSWORD: ${DB_PASSWORD:-monitor_p}
+      DB_SSL_MODE: disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: dashboard-service
+      OTEL_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8095/healthz" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  check-worker:
+    build:
+      context: ..
+      dockerfile: backend/check-worker/Dockerfile
+    environment:
+      CHECK_WORKER_SCHEDULER_ADDRESS: scheduler-service:9094
+      CHECK_WORKER_MONITOR_ADDRESS: monitor-service:9090
+      CHECK_WORKER_ZONE: default
+      CHECK_WORKER_MAX_CONCURRENT_CHECKS: 10
+      CHECK_WORKER_CHECK_TIMEOUT: 30s
+      CHECK_WORKER_POLL_INTERVAL: 5s
+      CHECK_WORKER_HEARTBEAT_INTERVAL: 10s
+      CHECK_WORKER_METRICS_ENABLED: "true"
+      CHECK_WORKER_METRICS_PORT: 9105
+      CHECK_WORKER_RETRY_MAX_ATTEMPTS: 5
+      CHECK_WORKER_RETRY_BASE_DELAY: 2s
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: check-worker
+      OTEL_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:9105/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+      monitor-service:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+    networks:
+      - monitor-network
+
+  integration-service:
+    build:
+      context: ..
+      dockerfile: backend/integration-service/Dockerfile
+    container_name: monitor-integration-service
+    environment:
+      SERVER_PORT: 8084
+      SERVER_GRPC_PORT: 5014
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: integration_service
+      DB_USER: monitor
+      DB_PASSWORD: monitor_p
+      DB_SSLMODE: disable
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_VHOST: /
+      RABBITMQ_EXCHANGE: monitor
+      AUTH_SERVICE_GRPC_ADDRESS: auth-service:5001
+      BILLING_SERVICE_GRPC_ADDRESS: billing-service:5003
+      MONITOR_SERVICE_GRPC_ADDRESS: monitor-service:9090
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-this-is-placeholder-32byte-key!!}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: integration-service
+      OTEL_LOG_LEVEL: debug
+      METRICS_ENABLED: "true"
+      METRICS_PORT: 9094
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8084/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  notification-template-service:
+    build:
+      context: ..
+      dockerfile: backend/notification-template-service/Dockerfile
+    container_name: monitor-notification-template-service
+    environment:
+      NOTIFICATION_TEMPLATE_SERVER_ADDRESS: ":50051"
+      NOTIFICATION_TEMPLATE_SERVER_TIMEOUT: "30s"
+      NOTIFICATION_TEMPLATE_DB_HOST: postgres
+      NOTIFICATION_TEMPLATE_DB_PORT: 5432
+      NOTIFICATION_TEMPLATE_DB_USER: monitor
+      NOTIFICATION_TEMPLATE_DB_PASSWORD: monitor_p
+      NOTIFICATION_TEMPLATE_DB_NAME: notification_templates
+      NOTIFICATION_TEMPLATE_DB_SSLMODE: disable
+      NOTIFICATION_TEMPLATE_JAEGER_ENDPOINT: jaeger:4318
+      NOTIFICATION_TEMPLATE_LOG_LEVEL: info
+      NOTIFICATION_TEMPLATE_ENVIRONMENT: development
+      NOTIFICATION_TEMPLATE_MAX_TEMPLATE_SIZE: "100000"
+      NOTIFICATION_TEMPLATE_ENABLE_PREVIEW: "true"
+    healthcheck:
+      test: [ "CMD", "grpc_health_probe", "-addr=localhost:50051" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+  reporting-service:
+    build:
+      context: ..
+      dockerfile: backend/reporting-service/Dockerfile
+    container_name: monitor-reporting-service
+    environment:
+      SERVER_PORT: 8084
+      SERVER_GRPC_PORT: 5007
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: monitor
+      DB_USER: monitor
+      DB_PASSWORD: monitor_p
+      DB_SSL_MODE: disable
+      MONITOR_SERVICE_GRPC_ADDRESS: monitor-service:9090
+      JWT_SECRET_KEY: ${JWT_SECRET:-change-me-to-at-least-32-characters-long}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: reporting-service
+      OTEL_ENABLED: "true"
+      METRICS_ENABLED: "true"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8084/health",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - monitor-network
+
+# network `monitor-network` определена в корневом compose-файле, который инклюдит этот файл
