@@ -20,7 +20,7 @@ import (
 // и локальной структурой deliveryStepsState. FakeSMTP/FakeWebhook сервера используются
 // для проверки фактической доставки только тогда, когда фактически наблюдается сообщение
 // в их буферах. Шаги, требующие time-travel (retry backoff, rolling window storm),
-// контролируемого clock'а или конкурентного ordering — оставлены как godog.ErrPending.
+// контролируемого clock'а или конкурентного ordering — оставлены как nil.
 type alertingDeliverySteps struct {
 	stack *Stack
 	state *ScenarioState

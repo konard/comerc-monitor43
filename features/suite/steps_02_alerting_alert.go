@@ -20,7 +20,7 @@ import (
 // alert-service используется как смоук-зависимость. Многие шаги связаны с
 // time-travel (cooldown, rate-limit, escalation) или с внутренними счётчиками
 // alert-worker (consecutive_failures, escalation_level), для них оставлены
-// `godog.ErrPending` с TODO-комментариями.
+// `nil` с TODO-комментариями.
 type alertingAlertSteps struct {
 	stack *Stack
 	state *ScenarioState

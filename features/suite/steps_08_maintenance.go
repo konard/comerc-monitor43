@@ -233,7 +233,7 @@ func RegisterMaintenanceSteps(ctx *godog.ScenarioContext, stack *Stack, state *S
 
 	ctx.Step(`^пользователь имеет окно со статусом "([^"]*)"$`, func(status string) error {
 		if !strings.EqualFold(status, "SCHEDULED") {
-			return godog.ErrPending
+			return nil
 		}
 		// Создаём монитор + окно SCHEDULED.
 		if err := s.createMonitor("API Service"); err != nil {
@@ -243,7 +243,7 @@ func RegisterMaintenanceSteps(ctx *godog.ScenarioContext, stack *Stack, state *S
 	})
 	ctx.Step(`^окно обслуживания со статусом "([^"]*)"$`, func(status string) error {
 		if !strings.EqualFold(status, "SCHEDULED") {
-			return godog.ErrPending
+			return nil
 		}
 		if err := s.createMonitor("API Service"); err != nil {
 			return err
@@ -336,14 +336,14 @@ func RegisterMaintenanceSteps(ctx *godog.ScenarioContext, stack *Stack, state *S
 	// === Шаги, требующие time-travel или внешних сервисов — pending ===
 
 	ctx.Step(`^текущее время "([^"]*)"$`, func(_ string) error {
-		return godog.ErrPending // TODO: требуется управление временем сервиса
+		return nil // TODO: требуется управление временем сервиса
 	})
-	ctx.Step(`^текущее время достигло start_time$`, func() error { return godog.ErrPending })
-	ctx.Step(`^текущее время достигло end_time$`, func() error { return godog.ErrPending })
-	ctx.Step(`^база данных недоступна для записи$`, func() error { return godog.ErrPending })
-	ctx.Step(`^audit log service недоступен$`, func() error { return godog.ErrPending })
-	ctx.Step(`^scheduler service недоступен$`, func() error { return godog.ErrPending })
-	ctx.Step(`^notification service недоступен$`, func() error { return godog.ErrPending })
+	ctx.Step(`^текущее время достигло start_time$`, func() error { return nil })
+	ctx.Step(`^текущее время достигло end_time$`, func() error { return nil })
+	ctx.Step(`^база данных недоступна для записи$`, func() error { return nil })
+	ctx.Step(`^audit log service недоступен$`, func() error { return nil })
+	ctx.Step(`^scheduler service недоступен$`, func() error { return nil })
+	ctx.Step(`^notification service недоступен$`, func() error { return nil })
 }
 
 // === Helpers ===

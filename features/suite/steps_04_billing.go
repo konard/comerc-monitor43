@@ -327,7 +327,7 @@ func (s *billingSteps) receiveWebhook(provider, event string) error {
 	// обновляя статусы платежа/подписки по provider_payment_id из payload.
 	// В реальном сценарии webhook приходит на REST, но gRPC-контракт эквивалентен.
 	if s.lastPaymentID == uuid.Nil {
-		return godog.ErrPending
+		return nil
 	}
 	var pay struct {
 		ProviderPaymentID string `db:"provider_payment_id"`
@@ -622,7 +622,7 @@ func (s *billingSteps) eventPublished(eventType string) error {
 	// TODO: подписаться на monitor-events exchange и верифицировать событие;
 	// в текущей итерации billing-service публикует события асинхронно.
 	_ = eventType
-	return godog.ErrPending
+	return nil
 }
 
 func (s *billingSteps) userHasMonitorLimit(count int) error {

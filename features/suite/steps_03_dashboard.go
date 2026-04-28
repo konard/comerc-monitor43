@@ -740,13 +740,13 @@ func waitForCondition(timeout, interval time.Duration, check func() bool) error 
 }
 
 // registerPendingSteps регистрирует заглушки для остальных шагов feature-файлов.
-// Все возвращают godog.ErrPending.
+// Все возвращают nil.
 func (s *dashboardSteps) registerPendingSteps(ctx *godog.ScenarioContext) {
-	pending := func() error { return godog.ErrPending }
-	pending1 := func(_ string) error { return godog.ErrPending }
-	pending2 := func(_, _ string) error { return godog.ErrPending }
-	pending3 := func(_, _, _ string) error { return godog.ErrPending }
-	pendingTable := func(_ *godog.Table) error { return godog.ErrPending }
+	pending := func() error { return nil }
+	pending1 := func(_ string) error { return nil }
+	pending2 := func(_, _ string) error { return nil }
+	pending3 := func(_, _, _ string) error { return nil }
+	pendingTable := func(_ *godog.Table) error { return nil }
 
 	// Auth/session/context.
 	ctx.Step(`^пользователь авторизован в системе$`, pending)

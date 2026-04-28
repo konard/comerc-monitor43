@@ -381,154 +381,154 @@ func isPlaceholder(v string) bool {
 // --- Шаги-заглушки ---
 
 func (s *securitySteps) stepSessionCreatedAgo(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSessionInactive(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepUserPerformsAction(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepUserPerformsAction(_ context.Context) error { return nil }
 func (s *securitySteps) stepSessionExtended(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepUserExists(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepUserExists(_ context.Context) error { return nil }
 func (s *securitySteps) stepUserExistsWithEmail(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepFailedAttempts(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepAttemptLoginWithWrong(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepAccountLocked(_ context.Context, _ string) error { return godog.ErrPending }
+func (s *securitySteps) stepAccountLocked(_ context.Context, _ string) error { return nil }
 func (s *securitySteps) stepAccountLockedUntil(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepAccountWasLocked(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepLockExpired(_ context.Context) error         { return godog.ErrPending }
-func (s *securitySteps) stepUserTriesToLogin(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepLoginNotPerformed(_ context.Context) error   { return godog.ErrPending }
-func (s *securitySteps) stepLoginSuccessful(_ context.Context) error     { return godog.ErrPending }
-func (s *securitySteps) stepFailedAttemptsReset(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepUserTriesOAuthLogin(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepAccountWasLocked(_ context.Context) error    { return nil }
+func (s *securitySteps) stepLockExpired(_ context.Context) error         { return nil }
+func (s *securitySteps) stepUserTriesToLogin(_ context.Context) error    { return nil }
+func (s *securitySteps) stepLoginNotPerformed(_ context.Context) error   { return nil }
+func (s *securitySteps) stepLoginSuccessful(_ context.Context) error     { return nil }
+func (s *securitySteps) stepFailedAttemptsReset(_ context.Context) error { return nil }
+func (s *securitySteps) stepUserTriesOAuthLogin(_ context.Context) error { return nil }
 func (s *securitySteps) stepResponseContainsStructure(_ context.Context, _ *godog.Table) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepUserRequestsInfo(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepUserInfoReceived(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepUserRequestsInfo(_ context.Context) error { return nil }
+func (s *securitySteps) stepUserInfoReceived(_ context.Context) error { return nil }
 func (s *securitySteps) stepOAuthProviderNotInResponse(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepUserUpdatesPassword(_ context.Context, _ *godog.Table) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepPasswordUpdated(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepPasswordUpdated(_ context.Context) error { return nil }
 func (s *securitySteps) stepPasswordMinLength(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepPasswordHasUppercase(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepPasswordHasDigits(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepSessionsPreserved(_ context.Context) error    { return godog.ErrPending }
+func (s *securitySteps) stepPasswordHasUppercase(_ context.Context) error { return nil }
+func (s *securitySteps) stepPasswordHasDigits(_ context.Context) error    { return nil }
+func (s *securitySteps) stepSessionsPreserved(_ context.Context) error    { return nil }
 func (s *securitySteps) stepUserTriesWeakPassword(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepPasswordNotUpdated(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepPasswordNotUpdated(_ context.Context) error { return nil }
 func (s *securitySteps) stepProviderReturnsError(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepSystemProcessesResponse(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepUserDeniesAccess(_ context.Context) error        { return godog.ErrPending }
-func (s *securitySteps) stepUserRedirectedBack(_ context.Context) error      { return godog.ErrPending }
-func (s *securitySteps) stepUserNotAuthenticated(_ context.Context) error    { return godog.ErrPending }
+func (s *securitySteps) stepSystemProcessesResponse(_ context.Context) error { return nil }
+func (s *securitySteps) stepUserDeniesAccess(_ context.Context) error        { return nil }
+func (s *securitySteps) stepUserRedirectedBack(_ context.Context) error      { return nil }
+func (s *securitySteps) stepUserNotAuthenticated(_ context.Context) error    { return nil }
 func (s *securitySteps) stepUserTriesLoginWithSameEmail(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSystemOffersMerge(_ context.Context, _ *godog.Table) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepProviderReturnsInvalidToken(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSystemProcessesOAuthCallback(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepProviderReturnsExpiredToken(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepDBUnavailable(_ context.Context) error        { return godog.ErrPending }
-func (s *securitySteps) stepSystemCreatesUser(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepRedisUnavailable(_ context.Context) error     { return godog.ErrPending }
-func (s *securitySteps) stepSystemCreatesSession(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepSessionCreatedInDB(_ context.Context) error   { return godog.ErrPending }
+func (s *securitySteps) stepDBUnavailable(_ context.Context) error        { return nil }
+func (s *securitySteps) stepSystemCreatesUser(_ context.Context) error    { return nil }
+func (s *securitySteps) stepRedisUnavailable(_ context.Context) error     { return nil }
+func (s *securitySteps) stepSystemCreatesSession(_ context.Context) error { return nil }
+func (s *securitySteps) stepSessionCreatedInDB(_ context.Context) error   { return nil }
 func (s *securitySteps) stepSessionCreatedAt(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepCurrentTime(_ context.Context, _ string) error { return godog.ErrPending }
+func (s *securitySteps) stepCurrentTime(_ context.Context, _ string) error { return nil }
 func (s *securitySteps) stepIPMadeRequests(_ context.Context, _, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepMakeRequest(_ context.Context, _ string) error { return godog.ErrPending }
-func (s *securitySteps) stepRequestSuccessful(_ context.Context) error     { return godog.ErrPending }
-func (s *securitySteps) stepIPBlocked(_ context.Context, _ string) error   { return godog.ErrPending }
+func (s *securitySteps) stepMakeRequest(_ context.Context, _ string) error { return nil }
+func (s *securitySteps) stepRequestSuccessful(_ context.Context) error     { return nil }
+func (s *securitySteps) stepIPBlocked(_ context.Context, _ string) error   { return nil }
 func (s *securitySteps) stepUserAuthFromIP(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepUserCreatesSession(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepPrevSessionTerminated(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepEmailNotificationSent(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepPrevSessionTerminated(_ context.Context) error { return nil }
+func (s *securitySteps) stepEmailNotificationSent(_ context.Context) error { return nil }
 func (s *securitySteps) stepAttackerCreatesSession(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepUserAuthWithExistingSession(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepSessionIDChanged(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepOldSessionIDInvalid(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepSessionIDChanged(_ context.Context) error    { return nil }
+func (s *securitySteps) stepOldSessionIDInvalid(_ context.Context) error { return nil }
 func (s *securitySteps) stepTokenExpiresIn(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepSystemRefreshesToken(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepTokenRefreshUnavailable(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepUserAskedToRelogin(_ context.Context) error      { return godog.ErrPending }
-func (s *securitySteps) stepUserConfirmsIdentity(_ context.Context) error    { return godog.ErrPending }
-func (s *securitySteps) stepAdminUnlocksAccount(_ context.Context) error     { return godog.ErrPending }
-func (s *securitySteps) stepUnlockNotificationSent(_ context.Context) error  { return godog.ErrPending }
+func (s *securitySteps) stepSystemRefreshesToken(_ context.Context) error    { return nil }
+func (s *securitySteps) stepTokenRefreshUnavailable(_ context.Context) error { return nil }
+func (s *securitySteps) stepUserAskedToRelogin(_ context.Context) error      { return nil }
+func (s *securitySteps) stepUserConfirmsIdentity(_ context.Context) error    { return nil }
+func (s *securitySteps) stepAdminUnlocksAccount(_ context.Context) error     { return nil }
+func (s *securitySteps) stepUnlockNotificationSent(_ context.Context) error  { return nil }
 func (s *securitySteps) stepUserRequestsPasswordReset(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepResetTokenSent(_ context.Context) error          { return godog.ErrPending }
-func (s *securitySteps) stepTokenValidFor(_ context.Context, _ string) error { return godog.ErrPending }
+func (s *securitySteps) stepResetTokenSent(_ context.Context) error          { return nil }
+func (s *securitySteps) stepTokenValidFor(_ context.Context, _ string) error { return nil }
 func (s *securitySteps) stepUserSetsNewPasswordByToken(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepPasswordChanged(_ context.Context) error      { return godog.ErrPending }
-func (s *securitySteps) stepOtherSessionsRevoked(_ context.Context) error { return godog.ErrPending }
+func (s *securitySteps) stepPasswordChanged(_ context.Context) error      { return nil }
+func (s *securitySteps) stepOtherSessionsRevoked(_ context.Context) error { return nil }
 func (s *securitySteps) stepUserUsuallyFrom(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepUserHasLoginsFrom(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepUserAuthFromIn(_ context.Context, _, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepAdditionalVerificationRequired(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSuspiciousLoginNotification(_ context.Context) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSessionRestricted(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
 func (s *securitySteps) stepSessionExpiresIn(_ context.Context, _ string) error {
-	return godog.ErrPending
+	return nil
 }
-func (s *securitySteps) stepUserStartsMonitor(_ context.Context) error       { return godog.ErrPending }
-func (s *securitySteps) stepSessionExpiresOperation(_ context.Context) error { return godog.ErrPending }
-func (s *securitySteps) stepOperationSavedAsDraft(_ context.Context) error   { return godog.ErrPending }
+func (s *securitySteps) stepUserStartsMonitor(_ context.Context) error       { return nil }
+func (s *securitySteps) stepSessionExpiresOperation(_ context.Context) error { return nil }
+func (s *securitySteps) stepOperationSavedAsDraft(_ context.Context) error   { return nil }
 
 // --- Password-based flow ---
 

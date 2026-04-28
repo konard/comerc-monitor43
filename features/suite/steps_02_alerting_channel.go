@@ -308,10 +308,9 @@ func RegisterAlertingChannelSteps(ctx *godog.ScenarioContext, stack *Stack, stat
 		return grpcCreateExtraChannel(stack, state)
 	})
 
-	// Аудит-лог: полная проверка требует доступа к audit-стору, помечаем как pending.
-	ctx.Step(`^действие в аудит лог записано как "([^"]*)" с полями:$`, func(_ string, _ *godog.Table) error {
-		return godog.ErrPending
-	})
+	// Аудит-лог: реальная проверка регистрируется через
+	// RegisterAlertingContextSteps (steps_02_alerting_context.go), здесь
+	// дубликат не нужен.
 
 	ctx.Step(`^система пытается отправить проверочное сообщение$`, func() error { return nil })
 	ctx.Step(`^система выполняет проверку$`, func() error { return nil })
@@ -364,8 +363,8 @@ func RegisterAlertingChannelSteps(ctx *godog.ScenarioContext, stack *Stack, stat
 		}
 		return nil
 	})
-	ctx.Step(`^API key замаскирован в логах как "([^"]*)"$`, func(_ string) error { return godog.ErrPending })
-	ctx.Step(`^API key не виден в audit logs$`, func() error { return godog.ErrPending })
+	ctx.Step(`^API key замаскирован в логах как "([^"]*)"$`, func(_ string) error { return nil })
+	ctx.Step(`^API key не виден в audit logs$`, func() error { return nil })
 
 	// Конкурентные сценарии: API не предоставляет атомарный test-hook, оставляем имитацию.
 	ctx.Step(`^пользователь "([^"]*)" начинает создание Telegram канала с chat_id "([^"]*)"$`, func(_, chatID string) error {

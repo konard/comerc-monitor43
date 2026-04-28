@@ -52,6 +52,12 @@ tasks:
     cmd: go run ./scripts/bdd_inventory.go "{{.OUT}}"
     silent: true
 
+  bdd-stubs:
+    desc: "Regenerate per-epic BDD step stubs (features/suite/steps_stub_NN_*.go)"
+    cmds:
+      - python3 experiments/gen_stubs.py
+      - python3 experiments/verify_steps.py
+
   test-clean:
     desc: "Clean testcache"
     cmd: go clean -testcache

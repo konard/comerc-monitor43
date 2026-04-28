@@ -116,12 +116,18 @@ func RunEpic(t *testing.T) {
 }
 
 // registerEpicSteps регистрирует шаги для конкретного эпика.
+//
+// Stub-шаги (RegisterStub*Steps) регистрируются ПОСЛЕ доменных, чтобы
+// доменные реализации имели приоритет при совпадении regex. См.
+// experiments/gen_stubs.py для генерации stub-файлов и docs/BDD_STUB_NOTES.md
+// для контракта по их постепенному вытеснению реальными реализациями.
 func registerEpicSteps(ctx *godog.ScenarioContext, epicName string, stack *Stack, state *ScenarioState) {
 	switch {
 	case len(epicName) >= 2 && epicName[:2] == "01":
 		RegisterCommonAuthSteps(ctx, state)
 		RegisterMonitoringSteps(ctx, stack, state)
 		RegisterMonitoringPipelineSteps(ctx, stack, state)
+		RegisterStub01MonitoringSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "02":
 		RegisterCommonAuthSteps(ctx, state)
 		RegisterAlertingAuthSteps(ctx, stack, state)
@@ -129,23 +135,32 @@ func registerEpicSteps(ctx *godog.ScenarioContext, epicName string, stack *Stack
 		RegisterAlertingAlertSteps(ctx, stack, state)
 		RegisterAlertingDeliverySteps(ctx, stack, state)
 		RegisterAlertingContextSteps(ctx, stack, state)
+		RegisterStub02AlertingSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "03":
 		RegisterDashboardSteps(ctx, stack, state)
+		RegisterStub03DashboardSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "04":
 		RegisterBillingSteps(ctx, stack, state)
+		RegisterStub04BillingSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "05":
 		RegisterSecuritySteps(ctx, stack, state)
 		RegisterTeamSteps(ctx, stack, state)
+		RegisterStub05SecuritySteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "06":
 		RegisterReportingSteps(ctx, stack, state)
+		RegisterStub06ReportingSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "07":
 		RegisterIntegrationsSteps(ctx, stack, state)
+		RegisterStub07IntegrationsSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "08":
 		RegisterMaintenanceSteps(ctx, stack, state)
+		RegisterStub08MaintenanceSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "09":
 		RegisterSchedulerSteps(ctx, stack, state)
+		RegisterStub09SchedulerSteps(ctx)
 	case len(epicName) >= 2 && epicName[:2] == "10":
 		RegisterCheckWorkerSteps(ctx, stack, state)
+		RegisterStub10CheckWorkerSteps(ctx)
 	default:
 		// Для новых эпиков добавляй case выше.
 	}
